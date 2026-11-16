@@ -26,11 +26,15 @@ L'objectif est d'**augmenter la fréquentation de 30 % sur 12 mois** grâce à u
 
 | Couche | Choix |
 |---|---|
-| Backend | PHP 8.3 – Laravel |
+| Backend | Node.js 22 – TypeScript – NestJS |
+| Accès aux données | Prisma (ORM et migrations) |
 | Base de données | MySQL 8 |
-| Frontend | Interface web responsive |
-| Qualité | Laravel Pint (PSR-12), PHPStan, PHPUnit, SonarCloud |
+| Cache et temps réel | Redis, WebSocket (Socket.IO) |
+| Frontend | React (Vite), interface responsive |
+| Qualité | ESLint, Prettier, Jest, Supertest, Playwright, k6, SonarCloud |
 | CI | GitHub Actions |
+
+Le backlog (EPICs et user stories) est issu du Bloc 2 : [tableau Trello](https://trello.com/b/TABpIPj5).
 
 ## Organisation du dépôt
 
@@ -43,6 +47,10 @@ Le projet suit un **GitFlow simplifié** :
 | `feature/*`, `fix/*`, `hotfix/*`, `release/*`, `docs/*`, `test/*` | Branches de travail temporaires. |
 
 La convention de nommage des branches, des commits et le processus de merge request sont documentés dans **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+## Modèle de données
+
+Le script SQL du modèle physique (MySQL 8) se trouve dans [`docs/database/schema.sql`](docs/database/schema.sql).
 
 ## Statut
 
