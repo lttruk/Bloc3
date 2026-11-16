@@ -1,0 +1,39 @@
+# Dépendances
+/vendor/
+/node_modules/
+
+# Environnement et secrets
+.env
+.env.backup
+.env.production
+.env.*.local
+auth.json
+
+# Laravel
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/bootstrap/cache/*.php
+
+# Tests et couverture
+.phpunit.result.cache
+/coverage/
+coverage.xml
+.phpunit.cache
+
+# Outils
+.php-cs-fixer.cache
+/.phpstan/
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+
+# IDE et système
+/.idea/
+/.vscode/
+/.fleet/
+.DS_Store
+Thumbs.db
