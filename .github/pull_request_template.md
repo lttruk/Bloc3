@@ -1,6 +1,6 @@
 ## User story
 
-<!-- Ex. : US03 – Réserver des places -->
+<!-- Ex. : US-3.2 – Sélectionner des places et les verrouiller (lien vers la carte Trello) -->
 
 ## Problème traité
 
@@ -18,7 +18,7 @@
 - [ ] La branche respecte la convention de nommage (voir CONTRIBUTING.md)
 - [ ] Critères d'acceptation couverts
 - [ ] Tests verts et CI réussie
-- [ ] PSR-12 (Pint) et analyse statique (PHPStan) OK
+- [ ] ESLint, Prettier et typage TypeScript OK
 - [ ] Contrôles d'accès et validation des entrées vérifiés
 - [ ] Aucun secret committé
 - [ ] Documentation mise à jour si nécessaire
