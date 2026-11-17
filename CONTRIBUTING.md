@@ -22,6 +22,7 @@ feature/...       ●───●           ●──●                    (une
 | `release/*` | `develop` | `main` **et** `develop` | Préparation d'une version | Stabilisation, corrections finales, changelog. |
 | `docs/*` | `develop` | `develop` | Documentation uniquement | Aucun changement de code applicatif. |
 | `test/*` | `develop` | `develop` | Ajout ou refonte de tests | Aucun changement de comportement applicatif. |
+| `chore/*` | `develop` | `develop` | Outillage, configuration, socle technique | Aucune fonctionnalité métier. |
 
 ## 2. Convention de nommage des branches
 
@@ -33,8 +34,8 @@ feature/...       ●───●           ●──●                    (une
 
 | Élément | Règle |
 |---|---|
-| `type` | Un des préfixes autorisés : `feature`, `fix`, `hotfix`, `release`, `docs`, `test` |
-| `identifiant` | Identifiant de la user story tel qu'il figure dans le [backlog Trello](https://trello.com/b/TABpIPj5) (`US3.2`), ou d'un ticket d'anomalie (`BUG12`). Facultatif pour `docs/*` et `test/*`. Pour `release/*`, le numéro de version (`v1.0.0`). |
+| `type` | Un des préfixes autorisés : `feature`, `fix`, `hotfix`, `release`, `docs`, `test`, `chore` |
+| `identifiant` | Identifiant de la user story tel qu'il figure dans le [backlog Trello](https://trello.com/b/TABpIPj5) (`US3.2`), ou d'un ticket d'anomalie (`BUG12`). Facultatif pour `docs/*`, `test/*` et `chore/*`. Pour `release/*`, le numéro de version (`v1.0.0`). |
 | `description-courte` | 2 à 5 mots en **kebab-case**, décrivant l'intention |
 
 ### Règles
@@ -54,6 +55,7 @@ feature/...       ●───●           ●──●                    (une
 | `release/v1.0.0` | `release/version-finale` | Pas de numéro de version |
 | `docs/modele-donnees` | `docs/US3.1/plan/salle` | Plusieurs niveaux de `/` |
 | `test/reservation-concurrence` | `tests/reservation` | Préfixe non autorisé |
+| `chore/socle-technique` | `setup` | Pas de type |
 
 ### Branches prévues pour le MVP (17 user stories du Bloc 2)
 
