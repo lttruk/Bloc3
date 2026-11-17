@@ -1,0 +1,211 @@
+// Schéma Prisma de La Grande Cinéma (MySQL 8)
+// Correspond au MLD du dossier (Dossier 1, Question 2) et à docs/database/schema.sql.
+// Les migrations sont écrites en SQL et appliquées avec « prisma migrate deploy » :
+// la colonne générée billet.place_occupee n'est pas gérée nativement par Prisma.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  CAISSIER
+  CONTROLEUR
+  PROGRAMMATION
+  ADMIN
+}
+
+enum StatutFilm {
+  BROUILLON
+  PUBLIE
+  ARCHIVE
+}
+
+enum TypePlace {
+  STANDARD
+  PMR
+}
+
+enum Version {
+  VF
+  VO
+}
+
+enum StatutSeance {
+  PROGRAMMEE
+  PUBLIEE
+  ANNULEE
+}
+
+enum Canal {
+  WEB
+  GUICHET
+}
+
+enum StatutReservation {
+  EN_ATTENTE
+  CONFIRMEE
+  ANNULEE
+  EXPIREE
+}
+
+enum StatutBillet {
+  ACTIF
+  UTILISE
+  ANNULE
+}
+
+enum StatutPaiement {
+  INITIE
+  ACCEPTE
+  REFUSE
+  REMBOURSE
+}
+
+model Utilisateur {
+  id                 Int           @id @default(autoincrement()) @db.UnsignedInt
+  nom                String        @db.VarChar(100)
+  prenom             String        @db.VarChar(100)
+  email              String        @unique(map: "email") @db.VarChar(254)
+  motDePasseHash     String        @map("mot_de_passe_hash") @db.VarChar(255)
+  role               Role          @default(CLIENT)
+  consentementRgpdLe DateTime      @map("consentement_rgpd_le") @db.DateTime(0)
+  creeLe             DateTime      @default(now()) @map("cree_le") @db.DateTime(0)
+  majLe              DateTime      @default(now()) @updatedAt @map("maj_le") @db.DateTime(0)
+  reservations       Reservation[]
+
+  @@map("utilisateur")
+}
+
+model Film {
+  id             Int        @id @default(autoincrement()) @db.UnsignedInt
+  titre          String     @db.VarChar(200)
+  synopsis       String?    @db.Text
+  dureeMinutes   Int        @map("duree_minutes") @db.UnsignedSmallInt
+  genre          String?    @db.VarChar(50)
+  classification String?    @db.VarChar(30)
+  statut         StatutFilm @default(BROUILLON)
+  seances        Seance[]
+
+  @@map("film")
+}
+
+model Salle {
+  id       Int      @id @default(autoincrement()) @db.UnsignedInt
+  nom      String   @unique(map: "nom") @db.VarChar(80)
+  capacite Int      @db.UnsignedSmallInt
+  places   Place[]
+  seances  Seance[]
+
+  @@map("salle")
+}
+
+model Place {
+  id      Int       @id @default(autoincrement()) @db.UnsignedInt
+  salleId Int       @map("salle_id") @db.UnsignedInt
+  rangee  String    @db.VarChar(5)
+  numero  Int       @db.UnsignedSmallInt
+  type    TypePlace @default(STANDARD)
+  active  Boolean   @default(true)
+  salle   Salle     @relation(fields: [salleId], references: [id], onDelete: Restrict, map: "fk_place_salle")
+  billets Billet[]
+
+  @@unique([salleId, rangee, numero], map: "uq_place_position")
+  @@map("place")
+}
+
+model Seance {
+  id             Int           @id @default(autoincrement()) @db.UnsignedInt
+  filmId         Int           @map("film_id") @db.UnsignedInt
+  salleId        Int           @map("salle_id") @db.UnsignedInt
+  debut          DateTime      @db.DateTime(0)
+  fin            DateTime      @db.DateTime(0)
+  version        Version       @default(VF)
+  ouvertureVente DateTime?     @map("ouverture_vente") @db.DateTime(0)
+  festival       Boolean       @default(false)
+  statut         StatutSeance  @default(PROGRAMMEE)
+  film           Film          @relation(fields: [filmId], references: [id], onDelete: Restrict, map: "fk_seance_film")
+  salle          Salle         @relation(fields: [salleId], references: [id], onDelete: Restrict, map: "fk_seance_salle")
+  reservations   Reservation[]
+  billets        Billet[]
+
+  @@index([salleId, debut], map: "idx_seance_salle_debut")
+  @@index([debut, statut], map: "idx_seance_debut_statut")
+  @@index([filmId], map: "fk_seance_film")
+  @@map("seance")
+}
+
+model Tarif {
+  id                 Int      @id @default(autoincrement()) @db.UnsignedInt
+  libelle            String   @unique(map: "libelle") @db.VarChar(50)
+  prix               Decimal  @db.Decimal(6, 2)
+  justificatifRequis Boolean  @default(false) @map("justificatif_requis")
+  actif              Boolean  @default(true)
+  billets            Billet[]
+
+  @@map("tarif")
+}
+
+model Reservation {
+  id            Int               @id @default(autoincrement()) @db.UnsignedInt
+  utilisateurId Int               @map("utilisateur_id") @db.UnsignedInt
+  seanceId      Int               @map("seance_id") @db.UnsignedInt
+  reference     String            @unique(map: "reference") @db.Char(12)
+  canal         Canal             @default(WEB)
+  statut        StatutReservation @default(EN_ATTENTE)
+  creeeLe       DateTime          @default(now()) @map("creee_le") @db.DateTime(0)
+  expireLe      DateTime?         @map("expire_le") @db.DateTime(0)
+  utilisateur   Utilisateur       @relation(fields: [utilisateurId], references: [id], onDelete: Restrict, map: "fk_reservation_utilisateur")
+  seance        Seance            @relation(fields: [seanceId], references: [id], onDelete: Restrict, map: "fk_reservation_seance")
+  billets       Billet[]
+  paiements     Paiement[]
+
+  @@index([statut, expireLe], map: "idx_reservation_expiration")
+  @@index([utilisateurId, creeeLe], map: "idx_reservation_utilisateur")
+  @@index([seanceId], map: "fk_reservation_seance")
+  @@map("reservation")
+}
+
+model Billet {
+  id            Int          @id @default(autoincrement()) @db.UnsignedInt
+  reservationId Int          @map("reservation_id") @db.UnsignedInt
+  seanceId      Int          @map("seance_id") @db.UnsignedInt
+  placeId       Int          @map("place_id") @db.UnsignedInt
+  tarifId       Int          @map("tarif_id") @db.UnsignedInt
+  prixApplique  Decimal      @map("prix_applique") @db.Decimal(6, 2)
+  codeQr        String?      @unique(map: "code_qr") @map("code_qr") @db.VarChar(512)
+  statut        StatutBillet @default(ACTIF)
+  scanneLe      DateTime?    @map("scanne_le") @db.DateTime(0)
+  // Colonne générée par MySQL (voir la migration) : 1 si le billet occupe la place, NULL s'il est annulé.
+  // Elle n'est jamais écrite par l'application.
+  placeOccupee  Int?         @map("place_occupee") @db.TinyInt
+  reservation   Reservation  @relation(fields: [reservationId], references: [id], onDelete: Restrict, map: "fk_billet_reservation")
+  seance        Seance       @relation(fields: [seanceId], references: [id], onDelete: Restrict, map: "fk_billet_seance")
+  place         Place        @relation(fields: [placeId], references: [id], onDelete: Restrict, map: "fk_billet_place")
+  tarif         Tarif        @relation(fields: [tarifId], references: [id], onDelete: Restrict, map: "fk_billet_tarif")
+
+  @@unique([seanceId, placeId, placeOccupee], map: "uq_billet_place_occupee")
+  @@index([reservationId], map: "idx_billet_reservation")
+  @@index([placeId], map: "fk_billet_place")
+  @@index([tarifId], map: "fk_billet_tarif")
+  @@map("billet")
+}
+
+model Paiement {
+  id                Int            @id @default(autoincrement()) @db.UnsignedInt
+  reservationId     Int            @map("reservation_id") @db.UnsignedInt
+  refTransactionPsp String         @unique(map: "ref_transaction_psp") @map("ref_transaction_psp") @db.VarChar(100)
+  montant           Decimal        @db.Decimal(8, 2)
+  statut            StatutPaiement @default(INITIE)
+  payeLe            DateTime?      @map("paye_le") @db.DateTime(0)
+  creeLe            DateTime       @default(now()) @map("cree_le") @db.DateTime(0)
+  reservation       Reservation    @relation(fields: [reservationId], references: [id], onDelete: Restrict, map: "fk_paiement_reservation")
+
+  @@index([reservationId], map: "fk_paiement_reservation")
+  @@map("paiement")
+}
