@@ -112,7 +112,8 @@ describe('POST /seances/:id/reservations (e2e, base MySQL)', () => {
 
   it('refuse une place déjà verrouillée (409)', async () => {
     await reserver(jetons[0]).expect(201);
-    await reserver(jetons[1]).expect(409);
+    const refus = await reserver(jetons[1]);
+    expect(refus.status).toBe(409);
   });
 
   it('une seule réservation réussit quand 20 clients visent la même place', async () => {
@@ -129,6 +130,7 @@ describe('POST /seances/:id/reservations (e2e, base MySQL)', () => {
     await reserver(jetons[0]).expect(201);
     await prisma.reservation.updateMany({ data: { expireLe: new Date(Date.now() - 1000) } });
     await app.get(LiberationPlacesTask).libererPlacesExpirees();
-    await reserver(jetons[1]).expect(201);
+    const nouvelle = await reserver(jetons[1]);
+    expect(nouvelle.status).toBe(201);
   });
 });

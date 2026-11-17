@@ -32,12 +32,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      - run: npm run prisma:generate
       - run: npm run lint
       - run: npm run typecheck
-      - run: npx prisma migrate deploy
+      - run: npm run prisma:migrate
       - run: npm run test:cov
       - run: npm run test:e2e
       - name: Analyse SonarCloud
         if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4 # v8.5.0
