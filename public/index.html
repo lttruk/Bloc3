@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Grande Cinéma – À l'affiche</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <a href="#" class="marque" id="lien-accueil">La <b>Grande</b> Cinéma</a>
+  <div class="recherche"><input type="search" id="recherche" placeholder="Film, genre…" aria-label="Rechercher un film"></div>
+  <div class="compte">
+    <span id="utilisateur" hidden></span>
+    <button class="bouton discret" id="btn-mes-reservations" type="button" hidden>Mes réservations</button>
+    <button class="bouton discret" id="btn-connexion" type="button">Se connecter</button>
+    <button class="lien" id="btn-deconnexion" type="button" hidden>Déconnexion</button>
+  </div>
+</header>
+
+<!-- Vue programme -->
+<section id="vue-programme">
+  <div class="scene">
+    <div class="nom">La <b>Grande</b> Cinéma · Festival</div>
+    <h1>À l'affiche</h1>
+    <div class="sous-titre">Dans les prochains jours</div>
+  </div>
+  <main>
+    <div class="filtres" id="filtres" role="group" aria-label="Choisir un jour"></div>
+    <div class="bandeau-demo" id="bandeau-demo" hidden>Mode démonstration : API non joignable, séances fictives.</div>
+    <div class="grille" id="grille"></div>
+  </main>
+</section>
+
+<!-- Vue plan de salle -->
+<section id="vue-salle" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut" id="salle-surtitre"></div>
+      <h2 id="salle-titre"></h2>
+      <div class="detail" id="salle-detail"></div>
+    </div>
+    <div class="disposition">
+      <div class="salle">
+        <div class="ecran" aria-hidden="true"></div>
+        <div class="ecran-libelle">Écran</div>
+        <div class="rangees" id="plan" role="group" aria-label="Plan de salle"></div>
+        <div class="legende">
+          <span><i></i>Libre</span><span><i class="sel"></i>Votre sélection</span>
+          <span><i class="cours"></i>En cours de réservation</span><span><i class="occ"></i>Occupée</span><span><i class="pmr"></i>PMR</span>
+        </div>
+        <div class="actualise" id="actualise">Plan actualisé automatiquement toutes les 5 secondes</div>
+      </div>
+      <aside class="panier" aria-live="polite">
+        <h3>Vos places</h3>
+        <div class="regle">10 places au maximum par réservation</div>
+        <div id="lignes"></div>
+        <div class="total"><span>Total</span><strong id="total">0,00 €</strong></div>
+        <button class="bouton" id="btn-reserver" type="button" disabled>Bloquer mes places</button>
+        <p class="mention">Vos places sont conservées 10 minutes, le temps de finaliser.</p>
+      </aside>
+    </div>
+  </main>
+</section>
+
+<!-- Vue confirmation -->
+<section id="vue-confirmation" hidden>
+  <main>
+    <div class="confirmation">
+      <div class="surtitre">Places bloquées</div>
+      <h2>C'est presque à vous !</h2>
+      <div class="detail doux" id="conf-detail"></div>
+      <div class="reference" id="conf-reference"></div>
+      <div class="doux petit">Temps restant pour finaliser</div>
+      <div class="chrono" id="chrono">10:00</div>
+      <p class="mention">Le paiement en ligne arrive dans une prochaine version.</p>
+      <div class="actions">
+        <button class="bouton" id="btn-voir-mes" type="button">Voir mes réservations</button>
+        <button class="bouton discret" id="btn-nouvelle" type="button">Retour à l'affiche</button>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- Vue mes réservations -->
+<section id="vue-mes-reservations" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour-mes" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut">Mon espace</div>
+      <h2>Mes réservations</h2>
+      <div class="detail">Les places en attente restent bloquées 10 minutes. Vous pouvez les libérer à tout moment.</div>
+    </div>
+    <div class="liste-reservations" id="liste-reservations"></div>
+  </main>
+</section>
+
+<footer>La Grande Cinéma · Réservation en ligne · Vos données sont traitées conformément au RGPD</footer>
+
+<dialog id="fenetre-auth" aria-label="Connexion ou création de compte">
+  <div class="onglets" role="tablist">
+    <button type="button" role="tab" aria-selected="true" id="onglet-connexion">Connexion</button>
+    <button type="button" role="tab" aria-selected="false" id="onglet-inscription">Créer un compte</button>
+  </div>
+  <form id="form-connexion" novalidate>
+    <label>E-mail<input type="email" name="email" autocomplete="email" required></label>
+    <label>Mot de passe<input type="password" name="motDePasse" autocomplete="current-password" required></label>
+    <p class="erreur" id="erreur-connexion" role="alert"></p>
+    <button class="bouton" type="submit">Se connecter</button>
+  </form>
+  <form id="form-inscription" novalidate hidden>
+    <label>Prénom<input type="text" name="prenom" autocomplete="given-name" required maxlength="100"></label>
+    <label>Nom<input type="text" name="nom" autocomplete="family-name" required maxlength="100"></label>
+    <label>E-mail<input type="email" name="email" autocomplete="email" required></label>
+    <label>Mot de passe<input type="password" name="motDePasse" autocomplete="new-password" required minlength="12"></label>
+    <div class="aide">12 caractères minimum, dont une majuscule, une minuscule et un chiffre.</div>
+    <label class="case"><input type="checkbox" name="consentementRgpd">J'accepte que mes données soient utilisées pour gérer mes réservations.</label>
+    <p class="erreur" id="erreur-inscription" role="alert"></p>
+    <button class="bouton" type="submit">Créer mon compte</button>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
