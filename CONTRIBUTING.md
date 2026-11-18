@@ -22,6 +22,7 @@ feature/...       ●───●           ●──●                    (une
 | `release/*` | `develop` | `main` **et** `develop` | Préparation d'une version | Stabilisation, corrections finales, changelog. |
 | `docs/*` | `develop` | `develop` | Documentation uniquement | Aucun changement de code applicatif. |
 | `test/*` | `develop` | `develop` | Ajout ou refonte de tests | Aucun changement de comportement applicatif. |
+| `chore/*` | `develop` | `develop` | Outillage, configuration, socle technique | Aucune fonctionnalité métier. |
 
 ## 2. Convention de nommage des branches
 
@@ -33,13 +34,13 @@ feature/...       ●───●           ●──●                    (une
 
 | Élément | Règle |
 |---|---|
-| `type` | Un des préfixes autorisés : `feature`, `fix`, `hotfix`, `release`, `docs`, `test` |
-| `identifiant` | Identifiant de la user story ou du ticket (`US03`, `BUG12`…). Facultatif pour `docs/*` et `test/*`. Pour `release/*`, le numéro de version (`v1.0.0`). |
+| `type` | Un des préfixes autorisés : `feature`, `fix`, `hotfix`, `release`, `docs`, `test`, `chore` |
+| `identifiant` | Identifiant de la user story tel qu'il figure dans le [backlog Trello](https://trello.com/b/TABpIPj5) (`US3.2`), ou d'un ticket d'anomalie (`BUG12`). Facultatif pour `docs/*`, `test/*` et `chore/*`. Pour `release/*`, le numéro de version (`v1.0.0`). |
 | `description-courte` | 2 à 5 mots en **kebab-case**, décrivant l'intention |
 
 ### Règles
 
-- Minuscules uniquement (sauf l'identifiant : `US03`), sans espace, sans accent, sans caractère spécial autre que `-` et `/`.
+- Minuscules uniquement (sauf l'identifiant : `US3.2`), sans espace, sans accent, sans caractère spécial autre que `-`, `/` et le point de l'identifiant.
 - Le nom décrit **ce que fait la branche**, jamais la personne qui la développe.
 - Une branche = un objectif. Si le périmètre change, on crée une nouvelle branche.
 
@@ -47,25 +48,36 @@ feature/...       ●───●           ●──●                    (une
 
 | ✅ Valide | ❌ Invalide | Pourquoi |
 |---|---|---|
-| `feature/US01-consultation-seances` | `feature/Consultation Séances` | Espaces, majuscules, accents |
-| `feature/US03-reservation-places` | `jdupont-dev` | Nom de personne, pas de type |
-| `fix/BUG04-double-reservation` | `fix/bug` | Pas d'identifiant ni d'intention |
-| `hotfix/BUG07-billet-qr-invalide` | `feature/US03_reservation` | Underscore au lieu de tiret |
+| `feature/US1.1-consultation-seances` | `feature/Consultation Séances` | Espaces, majuscules, accents |
+| `feature/US3.2-verrouillage-places` | `jdupont-dev` | Nom de personne, pas de type |
+| `fix/BUG4-double-reservation` | `fix/bug` | Pas d'identifiant ni d'intention |
+| `hotfix/BUG7-billet-qr-invalide` | `feature/US3.2_verrouillage` | Underscore au lieu de tiret |
 | `release/v1.0.0` | `release/version-finale` | Pas de numéro de version |
-| `docs/documentation-api` | `docs/US02/plan/salle` | Plusieurs niveaux de `/` |
+| `docs/modele-donnees` | `docs/US3.1/plan/salle` | Plusieurs niveaux de `/` |
 | `test/reservation-concurrence` | `tests/reservation` | Préfixe non autorisé |
+| `chore/socle-technique` | `setup` | Pas de type |
 
-### Branches prévues pour le premier incrément
+### Branches prévues pour le MVP (17 user stories du Bloc 2)
 
 | User story | Branche |
 |---|---|
-| US01 – Consulter les films et les séances | `feature/US01-consultation-seances` |
-| US02 – Visualiser les places disponibles | `feature/US02-visualisation-places` |
-| US03 – Réserver des places | `feature/US03-reservation-places` |
-| US04 – Accéder au billet dématérialisé | `feature/US04-billet-dematerialise` |
-| US05 – Gérer la programmation | `feature/US05-administration-programmation` |
-| US06 – Suivre les réservations | `feature/US06-suivi-reservations` |
-| US07 – Analyser le remplissage et anticiper les pics | `feature/US07-analyse-remplissage` |
+| US-1.1 Consulter les films et les séances | `feature/US1.1-consultation-seances` |
+| US-1.2 Consulter la fiche d'un film | `feature/US1.2-fiche-film` |
+| US-2.1 Créer un compte | `feature/US2.1-creation-compte` |
+| US-2.2 Se connecter et réinitialiser son mot de passe | `feature/US2.2-authentification` |
+| US-3.1 Plan de salle en temps réel | `feature/US3.1-plan-salle-temps-reel` |
+| US-3.2 Sélectionner et verrouiller des places | `feature/US3.2-verrouillage-places` |
+| US-3.3 Choisir un tarif et valider le récapitulatif | `feature/US3.3-tarifs-recapitulatif` |
+| US-4.1 Payer par carte bancaire | `feature/US4.1-paiement-carte` |
+| US-5.1 Recevoir le billet avec QR code | `feature/US5.1-billet-qr-code` |
+| US-5.2 Historique des réservations | `feature/US5.2-historique-reservations` |
+| US-6.1 Scanner un billet à l'entrée | `feature/US6.1-controle-billets` |
+| US-7.1 Gérer films et séances | `feature/US7.1-programmation-seances` |
+| US-7.2 Paramétrer tarifs, plans et ventes | `feature/US7.2-parametrage-ventes` |
+| US-7.3 Vendre au guichet | `feature/US7.3-vente-guichet` |
+| US-9.1 Tenir la charge du festival | `feature/US9.1-tenue-charge` |
+| US-9.2 RGPD et sécurité des données | `feature/US9.2-rgpd-securite` |
+| US-9.3 Supervision et alertes | `feature/US9.3-supervision` |
 
 ## 3. Convention de commits
 
@@ -101,14 +113,14 @@ git switch develop
 git pull origin develop
 
 # 2. Créer la branche de la story
-git switch -c feature/US01-consultation-seances
+git switch -c feature/US1.1-consultation-seances
 
 # 3. Développer, tester, committer
 git add .
 git commit -m "feat(seances): afficher les séances à venir"
 
 # 4. Pousser et ouvrir une merge request vers develop
-git push -u origin feature/US01-consultation-seances
+git push -u origin feature/US1.1-consultation-seances
 ```
 
 ## 5. Merge request et revue
@@ -117,8 +129,8 @@ Une merge request vers `develop` ne peut être fusionnée que si :
 
 - [ ] La branche respecte la convention de nommage.
 - [ ] Les critères d'acceptation de la story sont couverts.
-- [ ] Les tests passent et la CI est verte.
-- [ ] Le code respecte PSR-12 (Laravel Pint) et l'analyse statique (PHPStan).
+- [ ] Les tests passent (`npm run test:cov`, `npm run test:e2e`) et la CI est verte.
+- [ ] Le code passe ESLint, Prettier et le contrôle de types TypeScript (`npm run lint`, `npm run typecheck`).
 - [ ] Les contrôles d'accès et la validation des entrées ont été vérifiés.
 - [ ] Aucun secret (`.env`, mot de passe, jeton) n'est committé.
 - [ ] La documentation (README, API) est à jour si nécessaire.
