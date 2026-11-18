@@ -1,12 +1,17 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { configurerApplication } from './configuration-app';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   configurerApplication(app);
   app.enableCors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' });
+
+  // Site web de réservation (HTML, CSS et JavaScript statiques) servi par l'API elle-même
+  app.useStaticAssets(join(__dirname, '..', 'public'));
 
   const config = new DocumentBuilder()
     .setTitle('La Grande Cinéma – API')
