@@ -101,14 +101,14 @@
       b.setAttribute('aria-pressed', String(j === etat.jour));
       b.innerHTML = `${j === 0 ? "Aujourd'hui" : d.toLocaleDateString('fr-FR', { weekday: 'short' })}<span></span>`;
       b.querySelector('span').textContent = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-      b.addEventListener('click', () => { etat.jour = j; dessinerJours(); chargerProgramme(); });
+      b.addEventListener('click', () => { etat.jour = j; dessinerJours(); void chargerProgramme(); });
       conteneur.append(b);
     }
     const version = document.createElement('select');
     version.id = 'version';
     version.setAttribute('aria-label', 'Version');
     for (const [v, l] of [['', 'VF et VO'], ['VF', 'VF'], ['VO', 'VO']]) version.add(new Option(l, v, false, v === (etat.version ?? '')));
-    version.addEventListener('change', () => { etat.version = version.value || undefined; chargerProgramme(); });
+    version.addEventListener('change', () => { etat.version = version.value || undefined; void chargerProgramme(); });
     conteneur.append(version);
   }
 
@@ -152,16 +152,16 @@
       infos.querySelector('.pastille').textContent = s.version;
       const bouton = document.createElement('button');
       bouton.type = 'button'; bouton.className = 'bouton'; bouton.textContent = 'Choisir mes places';
-      bouton.addEventListener('click', () => ouvrirSeance(s));
+      bouton.addEventListener('click', () => void ouvrirSeance(s));
       // Bouton posé sur l'affiche : même action que « Choisir mes places »
       const surAffiche = document.createElement('button');
       surAffiche.type = 'button';
       surAffiche.className = 'bouton bouton-affiche';
       surAffiche.textContent = 'Réserver';
       surAffiche.setAttribute('aria-label', `Choisir mes places pour ${s.film.titre}, ${fmtHeure(s.debut)}`);
-      surAffiche.addEventListener('click', () => ouvrirSeance(s));
+      surAffiche.addEventListener('click', () => void ouvrirSeance(s));
       aff.append(surAffiche);
-      aff.addEventListener('click', (ev) => { if (ev.target === aff || !ev.target.closest('button')) ouvrirSeance(s); });
+      aff.addEventListener('click', (ev) => { if (ev.target === aff || !ev.target.closest('button')) void ouvrirSeance(s); });
       carte.append(aff, infos, bouton);
       grille.append(carte);
     }
@@ -273,7 +273,7 @@
     $('btn-reserver').disabled = true;
     try {
       const r = etat.demo
-        ? { reference: 'DEMO' + Math.random().toString(16).slice(2, 10).toUpperCase(), expireLe: new Date(Date.now() + 600000).toISOString() }
+        ? { reference: 'DEMO' + Array.from(crypto.getRandomValues(new Uint8Array(4)), (o) => o.toString(16).padStart(2, '0')).join('').toUpperCase(), expireLe: new Date(Date.now() + 600000).toISOString() }
         : await api(`/seances/${etat.seance.id}/reservations`, { method: 'POST', body: JSON.stringify({ places }) });
       if (etat.demo) {
         etat.demoReservations.unshift({
@@ -366,10 +366,10 @@
         comptes.push({ el: carte.querySelector('.reste'), fin: new Date(r.expireLe).getTime() });
         const voir = document.createElement('button');
         voir.type = 'button'; voir.className = 'bouton discret'; voir.textContent = 'Voir la séance';
-        voir.addEventListener('click', () => ouvrirSeanceParId(r.seanceId));
+        voir.addEventListener('click', () => void ouvrirSeanceParId(r.seanceId));
         const liberer = document.createElement('button');
         liberer.type = 'button'; liberer.className = 'bouton'; liberer.textContent = 'Libérer les places';
-        liberer.addEventListener('click', () => libererReservation(r.reference));
+        liberer.addEventListener('click', () => void libererReservation(r.reference));
         carte.querySelector('.boutons').append(voir, liberer);
       }
       conteneur.append(carte);
@@ -382,7 +382,7 @@
           c.el.textContent = `Places bloquées encore ${String(Math.floor(reste / 60000)).padStart(2, '0')}:${String(Math.floor((reste % 60000) / 1000)).padStart(2, '0')}`;
           if (reste === 0) expiree = true;
         }
-        if (expiree) ouvrirMesReservations();
+        if (expiree) void ouvrirMesReservations();
       };
       tic();
       etat.minuteurListe = setInterval(tic, 1000);
@@ -400,10 +400,10 @@
       }
       notifier('Vos places ont été libérées.');
       clearInterval(etat.minuteur);
-      ouvrirMesReservations();
+      void ouvrirMesReservations();
     } catch (e) {
       notifier(e.message);
-      ouvrirMesReservations();
+      void ouvrirMesReservations();
     }
   }
 
@@ -412,7 +412,7 @@
     if (!seance && !etat.demo) {
       try { seance = (await api(`/seances/${id}/places`)).seance; } catch (e) { notifier(e.message); return; }
     }
-    if (seance) ouvrirSeance(seance);
+    if (seance) void ouvrirSeance(seance);
   }
 
   // ---------- Compte ----------
@@ -479,8 +479,8 @@
 
   $('btn-connexion').addEventListener('click', () => ouvrirAuth(false));
   $('btn-deconnexion').addEventListener('click', () => { etat.jeton = null; etat.email = null; majCompte(); afficher('vue-programme'); notifier('Vous êtes déconnecté.'); });
-  $('btn-mes-reservations').addEventListener('click', ouvrirMesReservations);
-  $('btn-voir-mes').addEventListener('click', () => { clearInterval(etat.minuteur); ouvrirMesReservations(); });
+  $('btn-mes-reservations').addEventListener('click', () => void ouvrirMesReservations());
+  $('btn-voir-mes').addEventListener('click', () => { clearInterval(etat.minuteur); void ouvrirMesReservations(); });
   $('btn-retour-mes').addEventListener('click', () => afficher('vue-programme'));
   $('onglet-connexion').addEventListener('click', () => ouvrirAuth(false));
   $('onglet-inscription').addEventListener('click', () => ouvrirAuth(true));
@@ -488,11 +488,11 @@
   $('btn-retour').addEventListener('click', () => afficher('vue-programme'));
   $('btn-nouvelle').addEventListener('click', () => { clearInterval(etat.minuteur); afficher('vue-programme'); });
   $('lien-accueil').addEventListener('click', (ev) => { ev.preventDefault(); afficher('vue-programme'); });
-  $('btn-reserver').addEventListener('click', reserver);
+  $('btn-reserver').addEventListener('click', () => void reserver());
   $('recherche').addEventListener('input', dessinerProgramme);
 
   restaurerSession();
   majCompte();
   dessinerJours();
-  chargerProgramme();
+  void chargerProgramme();
 })();
