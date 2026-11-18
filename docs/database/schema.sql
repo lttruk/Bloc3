@@ -1,4 +1,4 @@
--- La Grande Cinéma – Modèle physique de données (MySQL 8)
+-- Le Grand Cinéma – Modèle physique de données (MySQL 8)
 -- Correspond au MCD et au MLD du Dossier 1, Question 2.
 
 CREATE DATABASE IF NOT EXISTS grande_cinema

@@ -1,4 +1,4 @@
-// Schéma Prisma de La Grande Cinéma (MySQL 8)
+// Schéma Prisma du Grand Cinéma (MySQL 8)
 // Correspond au MLD du dossier (Dossier 1, Question 2) et à docs/database/schema.sql.
 // Les migrations sont écrites en SQL et appliquées avec « prisma migrate deploy » :
 // la colonne générée billet.place_occupee n'est pas gérée nativement par Prisma.
