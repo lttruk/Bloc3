@@ -2,7 +2,7 @@
   "name": "la-grande-cinema-api",
   "version": "0.1.0",
   "private": true,
-  "description": "API de réservation de La Grande Cinéma (Bachelor Studi – Bloc 3)",
+  "description": "API de réservation du Grand Cinéma (Bachelor Studi – Bloc 3)",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=22"
