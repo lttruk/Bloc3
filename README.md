@@ -1,6 +1,6 @@
-# La Grande Cinéma – Application web de réservation
+# Le Grand Cinéma – Application web de réservation
 
-Application web de réservation de places pour le cinéma **La Grande Cinéma**, développée dans le cadre du Bachelor Développeur d'application (Studi) – Bloc 3 « Développer une solution digitale ».
+Application web de réservation de places pour le cinéma **Le Grand Cinéma**, développée dans le cadre du Bachelor Développeur d'application (Studi) – Bloc 3 « Développer une solution digitale ».
 
 ## Contexte
 
