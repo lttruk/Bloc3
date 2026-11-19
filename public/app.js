@@ -82,7 +82,7 @@
     const div = document.createElement('div');
     div.className = 'affiche';
     div.style.setProperty('--fond-affiche', `linear-gradient(160deg, ${a}, ${b})`);
-    const presente = document.createElement('div'); presente.className = 'presente'; presente.textContent = 'La Grande Cinéma présente';
+    const presente = document.createElement('div'); presente.className = 'presente'; presente.textContent = 'Le Grand Cinéma présente';
     const titre = document.createElement('div'); titre.className = 'titre-affiche'; titre.textContent = film.titre;
     const genre = document.createElement('div'); genre.className = 'genre-affiche'; genre.textContent = film.genre ?? '';
     div.append(presente, titre, genre);

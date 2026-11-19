@@ -15,7 +15,7 @@ async function bootstrap(): Promise<void> {
   app.useStaticAssets(join(__dirname, '..', 'public'));
 
   const config = new DocumentBuilder()
-    .setTitle('La Grande Cinéma – API')
+    .setTitle('Le Grand Cinéma – API')
     .setDescription('Consultation des séances, réservation et billetterie')
     .setVersion('1.0.0')
     .addBearerAuth()
