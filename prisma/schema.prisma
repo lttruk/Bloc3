@@ -60,6 +60,11 @@ enum StatutBillet {
   ANNULE
 }
 
+enum EntiteJournal {
+  FILM
+  SEANCE
+}
+
 enum StatutPaiement {
   INITIE
   ACCEPTE
@@ -78,6 +83,7 @@ model Utilisateur {
   creeLe             DateTime      @default(now()) @map("cree_le") @db.DateTime(0)
   majLe              DateTime      @default(now()) @updatedAt @map("maj_le") @db.DateTime(0)
   reservations       Reservation[]
+  journal            JournalAdmin[]
 
   @@map("utilisateur")
 }
@@ -208,4 +214,21 @@ model Paiement {
 
   @@index([reservationId], map: "fk_paiement_reservation")
   @@map("paiement")
+}
+
+// Journal des modifications du back-office (US-7.1) : qui, quoi, quand
+model JournalAdmin {
+  id            Int           @id @default(autoincrement()) @db.UnsignedInt
+  utilisateurId Int           @map("utilisateur_id") @db.UnsignedInt
+  action        String        @db.VarChar(40)
+  entite        EntiteJournal
+  entiteId      Int           @map("entite_id") @db.UnsignedInt
+  details       Json?
+  creeLe        DateTime      @default(now()) @map("cree_le") @db.DateTime(0)
+  utilisateur   Utilisateur   @relation(fields: [utilisateurId], references: [id], onDelete: Restrict, map: "fk_journal_utilisateur")
+
+  @@index([entite, entiteId], map: "idx_journal_entite")
+  @@index([creeLe], map: "idx_journal_date")
+  @@index([utilisateurId], map: "fk_journal_utilisateur")
+  @@map("journal_admin")
 }

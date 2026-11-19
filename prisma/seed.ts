@@ -103,6 +103,16 @@ const CRENEAUX: Array<[number, number, boolean]> = [
 async function main() {
   await creerCompte(variable('SEED_ADMIN_EMAIL'), variable('SEED_ADMIN_PASSWORD'), Role.ADMIN, 'Admin');
   await creerCompte(variable('SEED_USER_EMAIL'), variable('SEED_USER_PASSWORD'), Role.CLIENT, 'Spectateur');
+  // Comptes du personnel, créés seulement si leurs identifiants sont renseignés
+  const personnel: Array<[string, string, Role, string]> = [
+    ['SEED_PROG_EMAIL', 'SEED_PROG_PASSWORD', Role.PROGRAMMATION, 'Programmation'],
+    ['SEED_CONTROLEUR_EMAIL', 'SEED_CONTROLEUR_PASSWORD', Role.CONTROLEUR, 'Contrôleur'],
+  ];
+  for (const [email, motDePasse, role, prenom] of personnel) {
+    if (process.env[email] && process.env[motDePasse]) {
+      await creerCompte(variable(email), variable(motDePasse), role, prenom);
+    }
+  }
 
   const salles = [await creerSalle('Salle 1', 'ABCDEFGHIJ', 12), await creerSalle('Salle 2', 'ABCDEFGH', 10)];
 

@@ -35,6 +35,7 @@ describe('Mes réservations (e2e, base MySQL)', () => {
     await prisma.tarif.deleteMany();
     await prisma.film.deleteMany();
     await prisma.salle.deleteMany();
+    await prisma.journalAdmin.deleteMany();
     await prisma.utilisateur.deleteMany({ where: { email: { endsWith: '@mes-reservations.test' } } });
 
     const salle = await prisma.salle.create({ data: { nom: 'Salle e2e', capacite: 1 } });
