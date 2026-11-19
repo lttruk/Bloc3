@@ -12,6 +12,8 @@
   <div class="recherche"><input type="search" id="recherche" placeholder="Film, genre…" aria-label="Rechercher un film"></div>
   <div class="compte">
     <span id="utilisateur" hidden></span>
+    <button class="bouton discret" id="btn-controle" type="button" hidden>Contrôle</button>
+    <button class="bouton discret" id="btn-admin" type="button" hidden>Administration</button>
     <button class="bouton discret" id="btn-mes-reservations" type="button" hidden>Mes réservations</button>
     <button class="bouton discret" id="btn-connexion" type="button">Se connecter</button>
     <button class="lien" id="btn-deconnexion" type="button" hidden>Déconnexion</button>
@@ -74,9 +76,10 @@
       <div class="reference" id="conf-reference"></div>
       <div class="doux petit">Temps restant pour finaliser</div>
       <div class="chrono" id="chrono">10:00</div>
-      <p class="mention">Le paiement en ligne arrive dans une prochaine version.</p>
+      <p class="mention">Paiement sécurisé par carte bancaire sur la page de notre prestataire Stripe : vos données bancaires ne sont jamais enregistrées par le cinéma.</p>
       <div class="actions">
-        <button class="bouton" id="btn-voir-mes" type="button">Voir mes réservations</button>
+        <button class="bouton" id="btn-payer" type="button">Payer maintenant</button>
+        <button class="bouton discret" id="btn-voir-mes" type="button">Voir mes réservations</button>
         <button class="bouton discret" id="btn-nouvelle" type="button">Retour à l'affiche</button>
       </div>
     </div>
@@ -93,6 +96,121 @@
       <div class="detail">Les places en attente restent bloquées 10 minutes. Vous pouvez les libérer à tout moment.</div>
     </div>
     <div class="liste-reservations" id="liste-reservations"></div>
+  </main>
+</section>
+
+<!-- Vue back-office : programmation des films et des séances (US-7.1) -->
+<section id="vue-admin" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour-admin" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut">Back-office</div>
+      <h2>Programmation</h2>
+      <div class="detail">Les séances sont créées non publiées. Une salle ne peut pas accueillir deux séances qui se chevauchent, nettoyage de 15 minutes compris.</div>
+    </div>
+
+    <div class="onglets-admin" role="tablist" aria-label="Rubriques du back-office">
+      <button type="button" role="tab" aria-selected="true" data-onglet="admin-seances">Séances</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet="admin-films">Films</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet="admin-journal">Journal</button>
+    </div>
+
+    <div id="admin-seances" class="panneau-admin">
+      <form id="form-seance" class="bloc-admin form-admin" novalidate>
+        <h3 id="titre-form-seance">Programmer une séance</h3>
+        <label>Film<select name="filmId" required></select></label>
+        <label>Salle<select name="salleId" required></select></label>
+        <label>Début<input type="datetime-local" name="debut" required></label>
+        <label>Version<select name="version"><option value="VF">VF</option><option value="VO">VO</option></select></label>
+        <label>Ouverture de la vente<input type="datetime-local" name="ouvertureVente"></label>
+        <label class="case"><input type="checkbox" name="festival">Séance Jazz Festival</label>
+        <p class="erreur" id="erreur-seance" role="alert"></p>
+        <div class="actions-form">
+          <button class="bouton" type="submit" id="btn-enregistrer-seance">Programmer la séance</button>
+          <button class="bouton discret" type="button" id="btn-annuler-edition-seance" hidden>Abandonner la modification</button>
+        </div>
+      </form>
+
+      <div class="bloc-admin">
+        <div class="barre-admin">
+          <h3>Séances programmées</h3>
+          <label>Du<input type="date" id="filtre-admin-jour"></label>
+          <label>Salle<select id="filtre-admin-salle"><option value="">Toutes</option></select></label>
+        </div>
+        <div class="defilement"><table class="tableau" id="table-seances">
+          <thead><tr><th>Horaire</th><th>Film</th><th>Salle</th><th>Version</th><th>Billets</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="admin-films" class="panneau-admin" hidden>
+      <form id="form-film" class="bloc-admin form-admin" novalidate>
+        <h3 id="titre-form-film">Ajouter un film</h3>
+        <label>Titre<input type="text" name="titre" required maxlength="200"></label>
+        <label>Durée (minutes)<input type="number" name="dureeMinutes" required min="1" max="600"></label>
+        <label>Genre<input type="text" name="genre" maxlength="50"></label>
+        <label>Classification<input type="text" name="classification" maxlength="30"></label>
+        <label class="large">Synopsis<textarea name="synopsis" rows="3" maxlength="5000"></textarea></label>
+        <p class="erreur" id="erreur-film" role="alert"></p>
+        <div class="actions-form">
+          <button class="bouton" type="submit" id="btn-enregistrer-film">Ajouter le film</button>
+          <button class="bouton discret" type="button" id="btn-annuler-edition-film" hidden>Abandonner la modification</button>
+        </div>
+      </form>
+
+      <div class="bloc-admin">
+        <h3>Catalogue</h3>
+        <div class="defilement"><table class="tableau" id="table-films">
+          <thead><tr><th>Titre</th><th>Durée</th><th>Genre</th><th>Séances à venir</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="admin-journal" class="panneau-admin" hidden>
+      <div class="bloc-admin">
+        <h3>Dernières modifications</h3>
+        <div class="defilement"><table class="tableau" id="table-journal">
+          <thead><tr><th>Date</th><th>Auteur</th><th>Action</th><th>Élément</th><th>Détails</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- Vue contrôle des billets à l'entrée de la salle (US-6.1) -->
+<section id="vue-controle" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour-controle" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut">Contrôle d'accès</div>
+      <h2>Scanner les billets</h2>
+      <div class="detail">Choisissez la séance contrôlée, puis présentez le QR code du billet devant la caméra.</div>
+    </div>
+    <div class="controle">
+      <div class="bloc-admin">
+        <label>Séance contrôlée<select id="controle-seance"></select></label>
+        <div class="camera">
+          <video id="controle-video" playsinline muted></video>
+          <div class="viseur" aria-hidden="true"></div>
+          <p class="doux petit" id="controle-etat-camera">Caméra arrêtée</p>
+        </div>
+        <div class="actions-form">
+          <button class="bouton" id="btn-camera" type="button">Démarrer la caméra</button>
+        </div>
+        <form id="form-code-manuel" class="saisie-code">
+          <label>Ou saisir le code du billet<input type="text" name="code" autocomplete="off" maxlength="512"></label>
+          <button class="bouton discret" type="submit">Contrôler</button>
+        </form>
+      </div>
+      <div class="resultat-scan attente" id="resultat-scan" aria-live="assertive">
+        <div class="verdict" id="scan-verdict">En attente d'un billet</div>
+        <div class="message" id="scan-message"></div>
+        <dl class="infos-billet" id="scan-infos"></dl>
+      </div>
+    </div>
   </main>
 </section>
 
@@ -119,6 +237,14 @@
     <p class="erreur" id="erreur-inscription" role="alert"></p>
     <button class="bouton" type="submit">Créer mon compte</button>
   </form>
+</dialog>
+
+<dialog id="fenetre-billets" aria-label="Mes billets">
+  <div class="entete-billets">
+    <h3>Mes billets</h3>
+    <button class="lien" type="button" id="btn-fermer-billets">Fermer</button>
+  </div>
+  <div id="liste-billets"></div>
 </dialog>
 
 <div class="toast" id="toast" role="status"></div>

@@ -21,6 +21,7 @@ describe('Authentification (e2e, base MySQL)', () => {
     configurerApplication(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await prisma.journalAdmin.deleteMany();
     await prisma.utilisateur.deleteMany({ where: { email } });
   });
 

@@ -3,7 +3,11 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { BilletsModule } from './billets/billets.module';
+import { ControleModule } from './controle/controle.module';
+import { PaiementsModule } from './paiements/paiements.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { SanteController } from './sante/sante.controller';
@@ -18,6 +22,10 @@ import { SeancesModule } from './seances/seances.module';
     AuthModule,
     SeancesModule,
     ReservationsModule,
+    AdminModule,
+    PaiementsModule,
+    BilletsModule,
+    ControleModule,
   ],
   controllers: [SanteController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

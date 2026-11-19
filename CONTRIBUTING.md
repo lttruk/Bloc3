@@ -1,6 +1,6 @@
 # Guide de contribution
 
-Ce document définit les règles de travail sur le dépôt **La Grande Cinéma** : modèle de branches, convention de nommage, convention de commits et processus de revue.
+Ce document définit les règles de travail sur le dépôt **Le Grand Cinéma** : modèle de branches, convention de nommage, convention de commits et processus de revue.
 
 ## 1. Modèle de branches : GitFlow simplifié
 

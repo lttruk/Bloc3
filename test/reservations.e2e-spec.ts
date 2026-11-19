@@ -41,6 +41,7 @@ describe('POST /seances/:id/reservations (e2e, base MySQL)', () => {
     await prisma.tarif.deleteMany();
     await prisma.film.deleteMany();
     await prisma.salle.deleteMany();
+    await prisma.journalAdmin.deleteMany();
     await prisma.utilisateur.deleteMany();
 
     const salle = await prisma.salle.create({ data: { nom: 'Salle test', capacite: 2 } });
