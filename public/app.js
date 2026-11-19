@@ -297,6 +297,7 @@
     const libelles = [...etat.selection.values()].map((c) => `${c.place.rangee}${c.place.numero}`).join(', ');
     $('conf-detail').textContent = `${etat.seance.film.titre} · ${fmtJourLong(etat.seance.debut)} à ${fmtHeure(etat.seance.debut)} · Places ${libelles}`;
     $('conf-reference').textContent = r.reference;
+    etat.referenceAPayer = r.reference;
     clearInterval(etat.minuteur);
     const fin = new Date(r.expireLe).getTime();
     const tic = () => {
@@ -370,7 +371,10 @@
         const liberer = document.createElement('button');
         liberer.type = 'button'; liberer.className = 'bouton'; liberer.textContent = 'Libérer les places';
         liberer.addEventListener('click', () => void libererReservation(r.reference));
-        carte.querySelector('.boutons').append(voir, liberer);
+        const payerResa = document.createElement('button');
+        payerResa.type = 'button'; payerResa.className = 'bouton'; payerResa.textContent = 'Payer';
+        payerResa.addEventListener('click', () => void payer(r.reference));
+        carte.querySelector('.boutons').append(voir, liberer, payerResa);
       }
       conteneur.append(carte);
     }
@@ -414,6 +418,43 @@
     }
     if (seance) void ouvrirSeance(seance);
   }
+
+  // ---------- Paiement en ligne (US-4.1) ----------
+  async function payer(reference) {
+    if (etat.demo) { notifier('Paiement indisponible en mode démonstration.'); return; }
+    try {
+      const { url } = await api(`/reservations/${encodeURIComponent(reference)}/paiement`, { method: 'POST' });
+      window.location.assign(url);
+    } catch (e) {
+      if (e.status === 401) { etat.jeton = null; majCompte(); ouvrirAuth(false); notifier('Votre session a expiré : reconnectez-vous.'); return; }
+      notifier(e.message);
+    }
+  }
+
+  // Retour depuis la page Stripe : l'état du paiement est vérifié par l'API, pas déduit de l'adresse.
+  async function traiterRetourPaiement() {
+    const params = new URLSearchParams(window.location.search);
+    const retour = params.get('paiement');
+    if (!retour) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!etat.jeton) { ouvrirAuth(false); notifier('Reconnectez-vous pour retrouver votre réservation.'); return; }
+    if (retour === 'annule') {
+      notifier('Paiement non abouti : vos places restent bloquées jusqu’à la fin du délai de 10 minutes.');
+      void ouvrirMesReservations();
+      return;
+    }
+    try {
+      const r = await api('/paiements/verification', { method: 'POST', body: JSON.stringify({ sessionId: params.get('session_id') }) });
+      if (r.aRembourser) notifier('Paiement reçu après la libération de vos places : il vous sera remboursé.');
+      else if (r.statut === 'CONFIRMEE') notifier(`Paiement accepté : réservation ${r.reference} confirmée.`);
+      else notifier('Paiement en cours de validation : actualisez vos réservations dans un instant.');
+    } catch (e) {
+      notifier(e.message);
+    }
+    void ouvrirMesReservations();
+  }
+
+  $('btn-payer').addEventListener('click', () => { if (etat.referenceAPayer) void payer(etat.referenceAPayer); });
 
   // ---------- Back-office : programmation des films et des séances (US-7.1) ----------
   const ROLES_PROGRAMMATION = ['PROGRAMMATION', 'ADMIN'];
@@ -803,4 +844,5 @@
   majCompte();
   dessinerJours();
   void chargerProgramme();
+  void traiterRetourPaiement();
 })();

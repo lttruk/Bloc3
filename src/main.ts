@@ -6,7 +6,8 @@ import { AppModule } from './app.module';
 import { configurerApplication } from './configuration-app';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // rawBody : corps brut conservé pour vérifier la signature des notifications Stripe
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   configurerApplication(app);
   app.enableCors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' });
 
