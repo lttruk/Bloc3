@@ -13,16 +13,20 @@ function variable(nom: string): string {
   return valeur;
 }
 
-async function creerCompte(email: string, motDePasse: string, role: Role, prenom: string) {
+async function creerCompte(adresse: string, motDePasse: string, role: Role, prenom: string) {
+  // Même normalisation que la connexion, et mot de passe resynchronisé avec les variables
+  // d'environnement : un compte de démonstration reste utilisable si ses identifiants changent.
+  const email = adresse.trim().toLowerCase();
+  const motDePasseHash = await argon2.hash(motDePasse);
   return prisma.utilisateur.upsert({
     where: { email },
-    update: { role },
+    update: { role, motDePasseHash },
     create: {
       email,
       nom: 'Démo',
       prenom,
       role,
-      motDePasseHash: await argon2.hash(motDePasse),
+      motDePasseHash,
       consentementRgpdLe: new Date(),
     },
   });
