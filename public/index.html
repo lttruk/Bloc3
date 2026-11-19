@@ -116,6 +116,8 @@
     <div class="onglets-admin" role="tablist" aria-label="Rubriques du back-office">
       <button type="button" role="tab" aria-selected="true" data-onglet="admin-seances">Séances</button>
       <button type="button" role="tab" aria-selected="false" data-onglet="admin-films">Films</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet="admin-tarifs" data-role="ADMIN" hidden>Tarifs</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet="admin-salles" data-role="ADMIN" hidden>Salles</button>
       <button type="button" role="tab" aria-selected="false" data-onglet="admin-journal">Journal</button>
     </div>
 
@@ -169,6 +171,47 @@
           <thead><tr><th>Titre</th><th>Durée</th><th>Genre</th><th>Séances à venir</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody></tbody>
         </table></div>
+      </div>
+    </div>
+
+    <div id="admin-tarifs" class="panneau-admin" hidden>
+      <form id="form-tarif" class="bloc-admin form-admin" novalidate>
+        <h3 id="titre-form-tarif">Ajouter un tarif</h3>
+        <label>Libellé<input type="text" name="libelle" required maxlength="50"></label>
+        <label>Prix TTC (€)<input type="number" name="prix" required min="0" max="999.99" step="0.01"></label>
+        <label class="case"><input type="checkbox" name="justificatifRequis">Justificatif à présenter à l’entrée</label>
+        <p class="erreur" id="erreur-tarif" role="alert"></p>
+        <div class="actions-form">
+          <button class="bouton" type="submit" id="btn-enregistrer-tarif">Ajouter le tarif</button>
+          <button class="bouton discret" type="button" id="btn-annuler-edition-tarif" hidden>Abandonner la modification</button>
+        </div>
+      </form>
+      <div class="bloc-admin">
+        <h3>Tarifs</h3>
+        <p class="doux petit">Désactiver un tarif le retire de la vente ; les billets déjà vendus gardent leur prix.</p>
+        <div class="defilement"><table class="tableau" id="table-tarifs">
+          <thead><tr><th>Libellé</th><th>Prix</th><th>Justificatif</th><th>Billets vendus</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="admin-salles" class="panneau-admin" hidden>
+      <div class="bloc-admin">
+        <div class="barre-admin">
+          <h3>Configuration des salles</h3>
+          <label>Salle<select id="config-salle"></select></label>
+        </div>
+        <p class="doux petit" id="config-info"></p>
+        <div class="defilement"><table class="tableau" id="table-config">
+          <thead><tr><th>Rangée</th><th>Nombre de places</th><th>Places PMR (numéros)</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="erreur" id="erreur-config" role="alert"></p>
+        <div class="actions-form">
+          <button class="bouton discret" type="button" id="btn-ajouter-rangee">Ajouter une rangée</button>
+          <button class="bouton" type="button" id="btn-enregistrer-config">Enregistrer la configuration</button>
+        </div>
       </div>
     </div>
 

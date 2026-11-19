@@ -24,6 +24,7 @@ const seanceVendable = {
   statut: 'PUBLIEE',
   debut: new Date('2027-01-15T19:00:00Z'),
   salleId: 2,
+  creeeLe: new Date('2027-01-01T10:00:00Z'),
   version: 'VF',
   film: { titre: 'Hors Ligne', statut: 'PUBLIE' },
   salle: { nom: 'Salle 2' },
@@ -46,6 +47,7 @@ describe('GuichetService', () => {
     prisma = {
       seance: { findUnique: jest.fn().mockResolvedValue(seanceVendable), findMany: jest.fn() },
       place: {
+        count: jest.fn().mockResolvedValue(120),
         findMany: jest.fn().mockResolvedValue([
           { id: 10, rangee: 'C', numero: 4, type: 'STANDARD' },
           { id: 11, rangee: 'C', numero: 5, type: 'PMR' },
@@ -183,7 +185,9 @@ describe('GuichetService', () => {
         debut: seanceVendable.debut,
         version: 'VO',
         film: { titre: 'Hors Ligne' },
-        salle: { nom: 'Salle 2', capacite: 120 },
+        salleId: 2,
+        creeeLe: new Date('2027-01-01T10:00:00Z'),
+        salle: { nom: 'Salle 2' },
         _count: { billets: 20 },
       },
     ]);

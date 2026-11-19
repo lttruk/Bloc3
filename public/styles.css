@@ -290,3 +290,7 @@ footer { text-align: center; color: #80858f; font-size: .78rem; padding: 30px; b
 .bloc-guichet { margin: 14px 0 6px; }
 .bloc-guichet label { display: flex; flex-direction: column; gap: 6px; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .bloc-guichet select { background: #f4f4f5; color: #1c1d22; border: 0; padding: 10px 12px; font-size: .95rem; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* ---------- Paramétrage : salles (US-7.2) ---------- */
+.champ-config { background: #f4f4f5; color: #1c1d22; border: 0; padding: 8px 10px; font-size: .95rem; width: 100%; max-width: 220px; }
+.film .bouton:disabled { opacity: .55; cursor: not-allowed; }

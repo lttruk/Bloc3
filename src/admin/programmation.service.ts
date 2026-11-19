@@ -276,6 +276,8 @@ export class ProgrammationService {
           debut,
           fin,
           ouvertureVente,
+          // Une séance qui change de salle prend la configuration actuelle de la nouvelle salle (US-7.2)
+          ...(salleId !== avant.salle.id ? { creeeLe: new Date() } : {}),
           ...(dto.version ? { version: dto.version } : {}),
           ...(dto.festival !== undefined ? { festival: dto.festival } : {}),
         },

@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { toString as qrEnSvg } from 'qrcode';
 import { CodeQrService } from '../billets/code-qr.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { placesDeLaSeance } from '../salles/places-de-seance';
 import {
   BilanJourDto,
   SeanceGuichetDto,
@@ -68,21 +69,31 @@ export class GuichetService {
         id: true,
         debut: true,
         version: true,
+        salleId: true,
+        creeeLe: true,
         film: { select: { titre: true } },
-        salle: { select: { nom: true, capacite: true } },
+        salle: { select: { nom: true } },
         _count: { select: { billets: { where: { statut: { not: 'ANNULE' } } } } },
       },
       orderBy: { debut: 'asc' },
     });
-    return seances.map((s) => ({
-      id: s.id,
-      debut: s.debut,
-      film: s.film.titre,
-      salle: s.salle.nom,
-      version: s.version,
-      capacite: s.salle.capacite,
-      placesLibres: Math.max(0, s.salle.capacite - s._count.billets),
-    }));
+    // Capacité de chaque séance selon la configuration de salle qui lui est propre (US-7.2)
+    return Promise.all(
+      seances.map(async (s) => {
+        const capacite = await this.prisma.place.count({
+          where: placesDeLaSeance(s.salleId, s.creeeLe),
+        });
+        return {
+          id: s.id,
+          debut: s.debut,
+          film: s.film.titre,
+          salle: s.salle.nom,
+          version: s.version,
+          capacite,
+          placesLibres: Math.max(0, capacite - s._count.billets),
+        };
+      }),
+    );
   }
 
   /**
@@ -146,6 +157,7 @@ export class GuichetService {
             statut: true,
             debut: true,
             salleId: true,
+            creeeLe: true,
             version: true,
             film: { select: { titre: true, statut: true } },
             salle: { select: { nom: true } },
@@ -161,7 +173,7 @@ export class GuichetService {
         }
 
         const places = await tx.place.findMany({
-          where: { id: { in: placeIds }, salleId: seance.salleId, active: true },
+          where: { id: { in: placeIds }, ...placesDeLaSeance(seance.salleId, seance.creeeLe) },
           select: { id: true, rangee: true, numero: true, type: true },
         });
         if (places.length !== placeIds.length) {

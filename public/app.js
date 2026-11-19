@@ -153,6 +153,14 @@
       infos.querySelector('.pastille').textContent = s.version;
       const bouton = document.createElement('button');
       bouton.type = 'button'; bouton.className = 'bouton'; bouton.textContent = 'Choisir mes places';
+      // US-7.2 : la vente en ligne ouvre à la date fixée par l'administrateur
+      if (s.ouvertureVente && new Date(s.ouvertureVente) > new Date()) {
+        bouton.disabled = true;
+        bouton.textContent = `Vente dès le ${fmtDate(s.ouvertureVente)} à ${fmtHeure(s.ouvertureVente)}`;
+        carte.append(aff, infos, bouton);
+        grille.append(carte);
+        continue;
+      }
       bouton.addEventListener('click', () => void ouvrirSeance(s));
       // Bouton posé sur l'affiche : même action que « Choisir mes places »
       const surAffiche = document.createElement('button');
@@ -519,6 +527,8 @@
     try {
       [admin.films, admin.salles] = await Promise.all([api('/admin/films'), api('/admin/salles')]);
     } catch (e) { erreurAdmin(e); return; }
+    const estAdmin = roleDuJeton(etat.jeton) === 'ADMIN';
+    for (const b of document.querySelectorAll('.onglets-admin button[data-role="ADMIN"]')) b.hidden = !estAdmin;
     if (!$('filtre-admin-jour').value) $('filtre-admin-jour').value = versChampLocal(new Date().toISOString()).slice(0, 10);
     remplirListesAdmin();
     dessinerFilms();
@@ -547,6 +557,8 @@
       $(b.dataset.onglet).hidden = b.dataset.onglet !== id;
     }
     if (id === 'admin-journal') void chargerJournal();
+    if (id === 'admin-tarifs') void chargerTarifs();
+    if (id === 'admin-salles') void chargerConfiguration();
   }
 
   // ----- Séances -----
@@ -763,7 +775,7 @@
       cellule(tr, fmtHoraireAdmin(e.creeLe));
       cellule(tr, e.auteur);
       cellule(tr, LIBELLES_JOURNAL[e.action] ?? e.action);
-      cellule(tr, `${e.entite === 'FILM' ? 'Film' : 'Séance'} n° ${e.entiteId}`);
+      cellule(tr, `${{ FILM: 'Film', SEANCE: 'Séance', TARIF: 'Tarif', SALLE: 'Salle' }[e.entite] ?? e.entite} n° ${e.entiteId}`);
       cellule(tr, e.details ? JSON.stringify(e.details) : '').className = 'petit doux';
     }
   }
@@ -777,6 +789,133 @@
   $('btn-annuler-edition-film').addEventListener('click', reinitialiserFormFilm);
   $('filtre-admin-jour').addEventListener('change', () => void chargerSeancesAdmin());
   $('filtre-admin-salle').addEventListener('change', () => void chargerSeancesAdmin());
+
+  // ---------- Paramétrage administrateur : tarifs et salles (US-7.2) ----------
+  const parametrage = { tarifEdite: null };
+
+  async function chargerTarifs() {
+    let tarifs;
+    try { tarifs = await api('/admin/tarifs'); } catch (e) { erreurAdmin(e); return; }
+    const corps = $('table-tarifs').tBodies[0];
+    corps.replaceChildren();
+    for (const t of tarifs) {
+      const tr = corps.insertRow();
+      if (!t.actif) tr.className = 'annulee';
+      cellule(tr, t.libelle);
+      cellule(tr, euros(t.prix));
+      cellule(tr, t.justificatifRequis ? 'Oui' : 'Non');
+      cellule(tr, String(t.billetsVendus));
+      cellule(tr, pastilleStatut(t.actif ? 'PUBLIE' : 'ARCHIVE', { PUBLIE: 'Actif', ARCHIVE: 'Inactif' }));
+      const actions = document.createElement('div'); actions.className = 'actions-ligne';
+      actions.append(boutonAction('Modifier', () => editerTarif(t)));
+      actions.append(t.actif
+        ? boutonAction('Désactiver', () => basculerTarif(t, false), true)
+        : boutonAction('Activer', () => basculerTarif(t, true)));
+      cellule(tr, actions);
+    }
+  }
+
+  function editerTarif(t) {
+    parametrage.tarifEdite = t.id;
+    const f = $('form-tarif').elements;
+    f.libelle.value = t.libelle; f.prix.value = t.prix; f.justificatifRequis.checked = t.justificatifRequis;
+    $('titre-form-tarif').textContent = `Modifier le tarif « ${t.libelle} »`;
+    $('btn-enregistrer-tarif').textContent = 'Enregistrer';
+    $('btn-annuler-edition-tarif').hidden = false;
+    $('erreur-tarif').textContent = '';
+  }
+
+  function reinitialiserFormTarif() {
+    parametrage.tarifEdite = null;
+    $('form-tarif').reset();
+    $('titre-form-tarif').textContent = 'Ajouter un tarif';
+    $('btn-enregistrer-tarif').textContent = 'Ajouter le tarif';
+    $('btn-annuler-edition-tarif').hidden = true;
+    $('erreur-tarif').textContent = '';
+  }
+
+  async function enregistrerTarif(ev) {
+    ev.preventDefault();
+    const f = ev.target.elements;
+    const corps = { libelle: f.libelle.value, prix: Number(f.prix.value), justificatifRequis: f.justificatifRequis.checked };
+    try {
+      if (parametrage.tarifEdite) await api(`/admin/tarifs/${parametrage.tarifEdite}`, { method: 'PATCH', body: JSON.stringify(corps) });
+      else await api('/admin/tarifs', { method: 'POST', body: JSON.stringify(corps) });
+      notifier(parametrage.tarifEdite ? 'Tarif modifié : les billets déjà vendus gardent leur prix.' : 'Tarif ajouté.');
+      reinitialiserFormTarif();
+      await chargerTarifs();
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) erreurAdmin(e); else $('erreur-tarif').textContent = e.message;
+    }
+  }
+
+  async function basculerTarif(t, actif) {
+    try {
+      await api(`/admin/tarifs/${t.id}`, { method: 'PATCH', body: JSON.stringify({ actif }) });
+      notifier(actif ? `Tarif « ${t.libelle} » remis en vente.` : `Tarif « ${t.libelle} » retiré de la vente.`);
+      await chargerTarifs();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  async function chargerConfiguration() {
+    const choix = $('config-salle');
+    if (!choix.options.length) choix.replaceChildren(...admin.salles.map((s) => new Option(s.nom, s.id)));
+    if (!choix.value) return;
+    let config;
+    try { config = await api(`/admin/salles/${choix.value}/configuration`); } catch (e) { erreurAdmin(e); return; }
+    $('config-info').textContent = `Capacité actuelle : ${config.salle.capacite} places. `
+      + (config.seancesAVenir > 0
+        ? `Les ${config.seancesAVenir} séance(s) déjà programmée(s) gardent leur plan : la nouvelle configuration s’applique aux séances créées ensuite.`
+        : 'La nouvelle configuration s’appliquera aux séances créées ensuite.');
+    $('table-config').tBodies[0].replaceChildren();
+    for (const r of config.rangees) ajouterRangee(r);
+    $('erreur-config').textContent = '';
+  }
+
+  function ajouterRangee(r = null) {
+    const corps = $('table-config').tBodies[0];
+    const tr = corps.insertRow();
+    const suivante = r?.rangee ?? String.fromCharCode(65 + corps.rows.length - 1);
+    const champ = (type, valeur, attributs) => {
+      const input = document.createElement('input');
+      input.type = type; input.value = valeur;
+      Object.assign(input, attributs);
+      return input;
+    };
+    cellule(tr, champ('text', suivante, { maxLength: 2, className: 'champ-config', ariaLabel: 'Lettre de la rangée' }));
+    cellule(tr, champ('number', r?.places ?? 10, { min: 1, max: 60, className: 'champ-config', ariaLabel: 'Nombre de places' }));
+    cellule(tr, champ('text', (r?.pmr ?? []).join(', '), { className: 'champ-config', placeholder: 'ex. 1, 2', ariaLabel: 'Numéros des places PMR' }));
+    const actions = document.createElement('div'); actions.className = 'actions-ligne';
+    actions.append(boutonAction('Retirer', () => tr.remove(), true));
+    cellule(tr, actions);
+  }
+
+  async function enregistrerConfiguration() {
+    const rangees = [...$('table-config').tBodies[0].rows].map((tr) => {
+      const [lettre, places, pmr] = tr.querySelectorAll('input');
+      return {
+        rangee: lettre.value.trim().toUpperCase(),
+        places: Number(places.value),
+        pmr: pmr.value.split(',').map((n) => n.trim()).filter(Boolean).map(Number),
+      };
+    });
+    if (rangees.length === 0) { $('erreur-config').textContent = 'Une salle compte au moins une rangée.'; return; }
+    if (!window.confirm('Enregistrer cette configuration ? Elle s’appliquera aux séances créées à partir de maintenant.')) return;
+    try {
+      const config = await api(`/admin/salles/${$('config-salle').value}/configuration`, { method: 'PUT', body: JSON.stringify({ rangees }) });
+      notifier(`Configuration enregistrée : ${config.salle.capacite} places pour les nouvelles séances.`);
+      admin.salles = await api('/admin/salles');
+      await chargerConfiguration();
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) erreurAdmin(e); else $('erreur-config').textContent = e.message;
+    }
+  }
+
+  $('form-tarif').addEventListener('submit', (ev) => void enregistrerTarif(ev));
+  $('btn-annuler-edition-tarif').addEventListener('click', reinitialiserFormTarif);
+  $('config-salle').addEventListener('change', () => void chargerConfiguration());
+  $('btn-ajouter-rangee').addEventListener('click', () => ajouterRangee());
+  $('btn-enregistrer-config').addEventListener('click', () => void enregistrerConfiguration());
 
   // ---------- Billets dématérialisés avec QR code (US-5.1) ----------
   async function ouvrirBillets(reference) {
