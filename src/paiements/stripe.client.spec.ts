@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'node:crypto';
-import { StripeClient, TOLERANCE_SIGNATURE_S } from './stripe.client';
+import { adresseTransmissible, StripeClient, TOLERANCE_SIGNATURE_S } from './stripe.client';
 
 const SECRET = 'whsec_test_secret';
 const config = (valeurs: Record<string, string>) =>
@@ -110,6 +110,9 @@ describe('StripeClient', () => {
       expect(corps.get('line_items[0][price_data][unit_amount]')).toBe('2300');
       expect(corps.get('line_items[0][price_data][currency]')).toBe('eur');
       expect(corps.get('client_reference_id')).toBe('REF123');
+      // Les moyens de paiement sont réglés dans le tableau de bord Stripe, plus dans la requête
+      expect(corps.has('payment_method_types[0]')).toBe(false);
+      expect(corps.get('customer_email')).toBe('a@b.fr');
     });
 
     it('relit une session et refuse un identifiant douteux', async () => {
@@ -135,5 +138,12 @@ describe('StripeClient', () => {
         ServiceUnavailableException,
       );
     });
+  });
+
+  it('ne préremplit pas les adresses de démonstration sur des domaines réservés', () => {
+    expect(adresseTransmissible('camille@gmail.com')).toBe(true);
+    expect(adresseTransmissible('spectateur@lagrandecinema.test')).toBe(false);
+    expect(adresseTransmissible('a@site.example')).toBe(false);
+    expect(adresseTransmissible('a@poste.local ')).toBe(false);
   });
 });

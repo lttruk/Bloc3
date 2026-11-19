@@ -12,6 +12,14 @@ const API_STRIPE = 'https://api.stripe.com/v1';
 /** Écart maximal accepté entre l'horodatage signé d'une notification et l'heure du serveur. */
 export const TOLERANCE_SIGNATURE_S = 300;
 
+/** Domaines réservés (RFC 2606) des comptes de démonstration : aucune boîte aux lettres réelle. */
+const DOMAINES_RESERVES = /\.(test|example|invalid|localhost|local)$/i;
+
+/** Adresse préremplie sur la page Stripe, sauf adresse de démonstration (saisie alors sur la page). */
+export function adresseTransmissible(email: string): boolean {
+  return !DOMAINES_RESERVES.test(email.trim());
+}
+
 export interface SessionStripe {
   id: string;
   url: string | null;
@@ -54,14 +62,13 @@ export class StripeClient {
   creerSessionCheckout(s: NouvelleSession): Promise<SessionStripe> {
     return this.appeler('POST', '/checkout/sessions', {
       mode: 'payment',
-      'payment_method_types[0]': 'card',
       'line_items[0][quantity]': '1',
       'line_items[0][price_data][currency]': 'eur',
       'line_items[0][price_data][unit_amount]': String(s.montantCentimes),
       'line_items[0][price_data][product_data][name]': s.libelle,
       client_reference_id: s.reference,
       'metadata[reference]': s.reference,
-      customer_email: s.email,
+      ...(adresseTransmissible(s.email) ? { customer_email: s.email } : {}),
       success_url: s.urlSucces,
       cancel_url: s.urlAnnulation,
     });
