@@ -7,6 +7,8 @@ import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { BilletsModule } from './billets/billets.module';
 import { ControleModule } from './controle/controle.module';
+import { FilmsModule } from './films/films.module';
+import { GuichetModule } from './guichet/guichet.module';
 import { PaiementsModule } from './paiements/paiements.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReservationsModule } from './reservations/reservations.module';
@@ -21,11 +23,13 @@ import { SeancesModule } from './seances/seances.module';
     PrismaModule,
     AuthModule,
     SeancesModule,
+    FilmsModule,
     ReservationsModule,
     AdminModule,
     PaiementsModule,
     BilletsModule,
     ControleModule,
+    GuichetModule,
   ],
   controllers: [SanteController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

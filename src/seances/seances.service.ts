@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { placesDeLaSeance } from '../salles/places-de-seance';
 import { FiltresSeancesDto, PlanSalleDto, SeanceDto, StatutPlace } from './dto/seances.dto';
 
 export const PERIODE_PAR_DEFAUT_MS = 7 * 24 * 3600 * 1000;
@@ -12,6 +13,7 @@ const SELECTION_SEANCE = {
   fin: true,
   version: true,
   festival: true,
+  ouvertureVente: true,
   film: {
     select: {
       id: true,
@@ -55,14 +57,14 @@ export class SeancesService {
   async planDeSalle(seanceId: number): Promise<PlanSalleDto> {
     const seance = await this.prisma.seance.findFirst({
       where: { id: seanceId, statut: 'PUBLIEE', film: { statut: 'PUBLIE' } },
-      select: { ...SELECTION_SEANCE, salleId: true },
+      select: { ...SELECTION_SEANCE, salleId: true, creeeLe: true },
     });
     if (!seance) throw new NotFoundException('Séance introuvable.');
-    const { salleId, ...infosSeance } = seance;
+    const { salleId, creeeLe, ...infosSeance } = seance;
 
     const [places, billets, tarifs] = await Promise.all([
       this.prisma.place.findMany({
-        where: { salleId, active: true },
+        where: placesDeLaSeance(salleId, creeeLe),
         select: { id: true, rangee: true, numero: true, type: true },
         orderBy: [{ rangee: 'asc' }, { numero: 'asc' }],
       }),

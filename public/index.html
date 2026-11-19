@@ -12,6 +12,7 @@
   <div class="recherche"><input type="search" id="recherche" placeholder="Film, genre…" aria-label="Rechercher un film"></div>
   <div class="compte">
     <span id="utilisateur" hidden></span>
+    <button class="bouton discret" id="btn-guichet" type="button" hidden>Guichet</button>
     <button class="bouton discret" id="btn-controle" type="button" hidden>Contrôle</button>
     <button class="bouton discret" id="btn-admin" type="button" hidden>Administration</button>
     <button class="bouton discret" id="btn-mes-reservations" type="button" hidden>Mes réservations</button>
@@ -59,8 +60,11 @@
         <div class="regle">10 places au maximum par réservation</div>
         <div id="lignes"></div>
         <div class="total"><span>Total</span><strong id="total">0,00 €</strong></div>
+        <div class="bloc-guichet" id="bloc-guichet" hidden>
+          <label>Encaissement<select id="mode-paiement"><option value="CARTE">Carte bancaire</option><option value="ESPECES">Espèces</option></select></label>
+        </div>
         <button class="bouton" id="btn-reserver" type="button" disabled>Bloquer mes places</button>
-        <p class="mention">Vos places sont conservées 10 minutes, le temps de finaliser.</p>
+        <p class="mention" id="mention-panier">Vos places sont conservées 10 minutes, le temps de finaliser.</p>
       </aside>
     </div>
   </main>
@@ -112,6 +116,8 @@
     <div class="onglets-admin" role="tablist" aria-label="Rubriques du back-office">
       <button type="button" role="tab" aria-selected="true" data-onglet="admin-seances">Séances</button>
       <button type="button" role="tab" aria-selected="false" data-onglet="admin-films">Films</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet="admin-tarifs" data-role="ADMIN" hidden>Tarifs</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet="admin-salles" data-role="ADMIN" hidden>Salles</button>
       <button type="button" role="tab" aria-selected="false" data-onglet="admin-journal">Journal</button>
     </div>
 
@@ -151,6 +157,7 @@
         <label>Durée (minutes)<input type="number" name="dureeMinutes" required min="1" max="600"></label>
         <label>Genre<input type="text" name="genre" maxlength="50"></label>
         <label>Classification<input type="text" name="classification" maxlength="30"></label>
+        <label class="large">Bande-annonce (lien https YouTube ou Vimeo)<input type="url" name="bandeAnnonceUrl" maxlength="500" placeholder="https://www.youtube.com/watch?v=…"></label>
         <label class="large">Synopsis<textarea name="synopsis" rows="3" maxlength="5000"></textarea></label>
         <p class="erreur" id="erreur-film" role="alert"></p>
         <div class="actions-form">
@@ -168,6 +175,47 @@
       </div>
     </div>
 
+    <div id="admin-tarifs" class="panneau-admin" hidden>
+      <form id="form-tarif" class="bloc-admin form-admin" novalidate>
+        <h3 id="titre-form-tarif">Ajouter un tarif</h3>
+        <label>Libellé<input type="text" name="libelle" required maxlength="50"></label>
+        <label>Prix TTC (€)<input type="number" name="prix" required min="0" max="999.99" step="0.01"></label>
+        <label class="case"><input type="checkbox" name="justificatifRequis">Justificatif à présenter à l’entrée</label>
+        <p class="erreur" id="erreur-tarif" role="alert"></p>
+        <div class="actions-form">
+          <button class="bouton" type="submit" id="btn-enregistrer-tarif">Ajouter le tarif</button>
+          <button class="bouton discret" type="button" id="btn-annuler-edition-tarif" hidden>Abandonner la modification</button>
+        </div>
+      </form>
+      <div class="bloc-admin">
+        <h3>Tarifs</h3>
+        <p class="doux petit">Désactiver un tarif le retire de la vente ; les billets déjà vendus gardent leur prix.</p>
+        <div class="defilement"><table class="tableau" id="table-tarifs">
+          <thead><tr><th>Libellé</th><th>Prix</th><th>Justificatif</th><th>Billets vendus</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="admin-salles" class="panneau-admin" hidden>
+      <div class="bloc-admin">
+        <div class="barre-admin">
+          <h3>Configuration des salles</h3>
+          <label>Salle<select id="config-salle"></select></label>
+        </div>
+        <p class="doux petit" id="config-info"></p>
+        <div class="defilement"><table class="tableau" id="table-config">
+          <thead><tr><th>Rangée</th><th>Nombre de places</th><th>Places PMR (numéros)</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="erreur" id="erreur-config" role="alert"></p>
+        <div class="actions-form">
+          <button class="bouton discret" type="button" id="btn-ajouter-rangee">Ajouter une rangée</button>
+          <button class="bouton" type="button" id="btn-enregistrer-config">Enregistrer la configuration</button>
+        </div>
+      </div>
+    </div>
+
     <div id="admin-journal" class="panneau-admin" hidden>
       <div class="bloc-admin">
         <h3>Dernières modifications</h3>
@@ -176,6 +224,26 @@
           <tbody></tbody>
         </table></div>
       </div>
+    </div>
+  </main>
+</section>
+
+<!-- Vue guichet : vente au comptoir avec le même système de réservation (US-7.3) -->
+<section id="vue-guichet" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour-guichet" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut">Guichet</div>
+      <h2>Vente au comptoir</h2>
+      <div class="detail">Les places vendues ici sont aussitôt indisponibles sur le site, et inversement. Chaque billet porte le même QR code signé qu'un billet acheté en ligne.</div>
+    </div>
+    <div class="bilan-guichet" id="bilan-guichet" aria-live="polite"></div>
+    <div class="bloc-admin">
+      <h3>Séances en vente</h3>
+      <div class="defilement"><table class="tableau" id="table-guichet">
+        <thead><tr><th>Horaire</th><th>Film</th><th>Salle</th><th>Version</th><th>Places libres</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
     </div>
   </main>
 </section>
@@ -241,10 +309,31 @@
 
 <dialog id="fenetre-billets" aria-label="Mes billets">
   <div class="entete-billets">
-    <h3>Mes billets</h3>
-    <button class="lien" type="button" id="btn-fermer-billets">Fermer</button>
+    <h3 id="titre-billets">Mes billets</h3>
+    <div class="actions-form">
+      <button class="bouton discret" type="button" id="btn-imprimer-tous" hidden>Imprimer tous les billets</button>
+      <button class="lien" type="button" id="btn-fermer-billets">Fermer</button>
+    </div>
   </div>
   <div id="liste-billets"></div>
+</dialog>
+
+<!-- Fiche détaillée d'un film (US-1.2) -->
+<dialog id="fenetre-film" aria-labelledby="fiche-titre">
+  <div class="fiche-entete">
+    <div id="fiche-affiche"></div>
+    <div class="fiche-infos">
+      <div class="surtitre" id="fiche-genre"></div>
+      <h2 id="fiche-titre"></h2>
+      <p class="fiche-detail" id="fiche-detail"></p>
+      <p id="fiche-synopsis"></p>
+      <div class="fiche-tarifs" id="fiche-tarifs"></div>
+    </div>
+    <button class="lien fermer-fiche" type="button" id="btn-fermer-fiche">Fermer</button>
+  </div>
+  <div class="fiche-video" id="fiche-video"></div>
+  <h3 class="fiche-intertitre">Séances</h3>
+  <div id="fiche-seances"></div>
 </dialog>
 
 <div class="toast" id="toast" role="status"></div>

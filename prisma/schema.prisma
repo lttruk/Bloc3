@@ -63,6 +63,8 @@ enum StatutBillet {
 enum EntiteJournal {
   FILM
   SEANCE
+  TARIF
+  SALLE
 }
 
 enum StatutPaiement {
@@ -73,30 +75,35 @@ enum StatutPaiement {
 }
 
 model Utilisateur {
-  id                 Int           @id @default(autoincrement()) @db.UnsignedInt
-  nom                String        @db.VarChar(100)
-  prenom             String        @db.VarChar(100)
-  email              String        @unique(map: "email") @db.VarChar(254)
-  motDePasseHash     String        @map("mot_de_passe_hash") @db.VarChar(255)
-  role               Role          @default(CLIENT)
-  consentementRgpdLe DateTime      @map("consentement_rgpd_le") @db.DateTime(0)
-  creeLe             DateTime      @default(now()) @map("cree_le") @db.DateTime(0)
-  majLe              DateTime      @default(now()) @updatedAt @map("maj_le") @db.DateTime(0)
-  reservations       Reservation[]
-  journal            JournalAdmin[]
+  id                     Int                     @id @default(autoincrement()) @db.UnsignedInt
+  nom                    String                  @db.VarChar(100)
+  prenom                 String                  @db.VarChar(100)
+  email                  String                  @unique(map: "email") @db.VarChar(254)
+  motDePasseHash         String                  @map("mot_de_passe_hash") @db.VarChar(255)
+  role                   Role                    @default(CLIENT)
+  consentementRgpdLe     DateTime                @map("consentement_rgpd_le") @db.DateTime(0)
+  echecsConnexion        Int                     @default(0) @map("echecs_connexion") @db.UnsignedTinyInt
+  bloqueJusquA           DateTime?               @map("bloque_jusqu_a") @db.DateTime(0)
+  creeLe                 DateTime                @default(now()) @map("cree_le") @db.DateTime(0)
+  majLe                  DateTime                @default(now()) @updatedAt @map("maj_le") @db.DateTime(0)
+  reservations           Reservation[]
+  journal                JournalAdmin[]
+  connexions             JournalConnexion[]
+  jetonsRafraichissement JetonRafraichissement[]
 
   @@map("utilisateur")
 }
 
 model Film {
-  id             Int        @id @default(autoincrement()) @db.UnsignedInt
-  titre          String     @db.VarChar(200)
-  synopsis       String?    @db.Text
-  dureeMinutes   Int        @map("duree_minutes") @db.UnsignedSmallInt
-  genre          String?    @db.VarChar(50)
-  classification String?    @db.VarChar(30)
-  statut         StatutFilm @default(BROUILLON)
-  seances        Seance[]
+  id              Int        @id @default(autoincrement()) @db.UnsignedInt
+  titre           String     @db.VarChar(200)
+  synopsis        String?    @db.Text
+  dureeMinutes    Int        @map("duree_minutes") @db.UnsignedSmallInt
+  genre           String?    @db.VarChar(50)
+  classification  String?    @db.VarChar(30)
+  bandeAnnonceUrl String?    @map("bande_annonce_url") @db.VarChar(500)
+  statut          StatutFilm @default(BROUILLON)
+  seances         Seance[]
 
   @@map("film")
 }
@@ -118,6 +125,9 @@ model Place {
   numero  Int       @db.UnsignedSmallInt
   type    TypePlace @default(STANDARD)
   active  Boolean   @default(true)
+  // US-7.2 : période pendant laquelle la place fait partie de la configuration de la salle
+  ajouteeLe DateTime  @default(now()) @map("ajoutee_le") @db.DateTime(0)
+  retireeLe DateTime? @map("retiree_le") @db.DateTime(0)
   salle   Salle     @relation(fields: [salleId], references: [id], onDelete: Restrict, map: "fk_place_salle")
   billets Billet[]
 
@@ -135,6 +145,8 @@ model Seance {
   ouvertureVente DateTime?     @map("ouverture_vente") @db.DateTime(0)
   festival       Boolean       @default(false)
   statut         StatutSeance  @default(PROGRAMMEE)
+  // Date de création : fixe la configuration de salle utilisée par la séance (US-7.2)
+  creeeLe        DateTime      @default(now()) @map("creee_le") @db.DateTime(0)
   film           Film          @relation(fields: [filmId], references: [id], onDelete: Restrict, map: "fk_seance_film")
   salle          Salle         @relation(fields: [salleId], references: [id], onDelete: Restrict, map: "fk_seance_salle")
   reservations   Reservation[]
@@ -231,4 +243,38 @@ model JournalAdmin {
   @@index([creeLe], map: "idx_journal_date")
   @@index([utilisateurId], map: "fk_journal_utilisateur")
   @@map("journal_admin")
+}
+
+enum ResultatConnexion {
+  SUCCES
+  ECHEC
+  BLOQUE
+}
+
+/// Journal des tentatives de connexion (US-2.2) : aucune donnée sensible, IP tronquée.
+model JournalConnexion {
+  id            Int               @id @default(autoincrement()) @db.UnsignedInt
+  utilisateurId Int?              @map("utilisateur_id") @db.UnsignedInt
+  resultat      ResultatConnexion
+  ipTronquee    String?           @map("ip_tronquee") @db.VarChar(45)
+  creeLe        DateTime          @default(now()) @map("cree_le") @db.DateTime(0)
+  utilisateur   Utilisateur?      @relation(fields: [utilisateurId], references: [id], onDelete: SetNull, map: "fk_journal_connexion_utilisateur")
+
+  @@index([utilisateurId, creeLe], map: "idx_journal_connexion_utilisateur")
+  @@index([creeLe], map: "idx_journal_connexion_date")
+  @@map("journal_connexion")
+}
+
+/// Jetons de rafraichissement (US-2.2) : seule leur empreinte SHA-256 est stockée.
+model JetonRafraichissement {
+  id            Int         @id @default(autoincrement()) @db.UnsignedInt
+  utilisateurId Int         @map("utilisateur_id") @db.UnsignedInt
+  empreinte     String      @unique(map: "uq_jeton_empreinte") @db.Char(64)
+  expireLe      DateTime    @map("expire_le") @db.DateTime(0)
+  revoqueLe     DateTime?   @map("revoque_le") @db.DateTime(0)
+  creeLe        DateTime    @default(now()) @map("cree_le") @db.DateTime(0)
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade, map: "fk_jeton_utilisateur")
+
+  @@index([utilisateurId], map: "idx_jeton_utilisateur")
+  @@map("jeton_rafraichissement")
 }

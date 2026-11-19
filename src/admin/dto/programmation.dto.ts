@@ -10,6 +10,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Max,
   MaxLength,
   Min,
@@ -55,6 +56,22 @@ export class CreerFilmDto {
   @IsString()
   @MaxLength(30)
   classification?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://www.youtube.com/watch?v=abcdefghijk',
+    nullable: true,
+    description: 'Lien https vers la bande-annonce (US-1.2) ; une chaîne vide le retire',
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() || null : value,
+  )
+  @IsOptional()
+  @IsUrl(
+    { protocols: ['https'], require_protocol: true },
+    { message: 'La bande-annonce doit être un lien https valide.' },
+  )
+  @MaxLength(500)
+  bandeAnnonceUrl?: string | null;
 }
 
 export class ModifierFilmDto extends PartialType(CreerFilmDto) {}
@@ -72,6 +89,7 @@ export class FilmAdminDto {
   @ApiProperty() dureeMinutes!: number;
   @ApiProperty({ nullable: true }) genre!: string | null;
   @ApiProperty({ nullable: true }) classification!: string | null;
+  @ApiProperty({ nullable: true }) bandeAnnonceUrl!: string | null;
   @ApiProperty({ enum: StatutFilm }) statut!: StatutFilm;
   @ApiProperty({ description: 'Nombre de séances à venir non annulées' }) seancesAVenir!: number;
 }
@@ -168,7 +186,8 @@ export class SalleAdminDto {
 export class EntreeJournalDto {
   @ApiProperty() id!: number;
   @ApiProperty() action!: string;
-  @ApiProperty({ enum: ['FILM', 'SEANCE'] }) entite!: 'FILM' | 'SEANCE';
+  @ApiProperty({ enum: ['FILM', 'SEANCE', 'TARIF', 'SALLE'] })
+  entite!: 'FILM' | 'SEANCE' | 'TARIF' | 'SALLE';
   @ApiProperty() entiteId!: number;
   @ApiProperty({ nullable: true }) details!: unknown;
   @ApiProperty() creeLe!: Date;

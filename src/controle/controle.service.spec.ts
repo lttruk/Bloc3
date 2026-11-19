@@ -60,6 +60,20 @@ describe('ControleService', () => {
     });
   });
 
+  it('affiche « Vente au guichet » comme titulaire d’un billet vendu au comptoir', async () => {
+    prisma.billet.findUnique.mockResolvedValue(
+      billetEnBase({
+        reservation: {
+          statut: 'CONFIRMEE',
+          canal: 'GUICHET',
+          utilisateur: { prenom: 'Caisse', nom: '1' },
+        },
+      }),
+    );
+    const resultat = await service.scanner({ code: CODE });
+    expect(resultat.billet?.titulaire).toBe('Vente au guichet');
+  });
+
   it('refuse un QR code falsifié ou illisible', async () => {
     codesQr.lire.mockReturnValue(null);
     const resultat = await service.scanner({ code: 'faux' });

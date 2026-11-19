@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { placesDeLaSeance } from '../salles/places-de-seance';
 import { CreerReservationDto } from './dto/creer-reservation.dto';
 
 export const DUREE_VERROU_MS = 10 * 60 * 1000;
@@ -67,7 +68,7 @@ export class ReservationsService {
       }
 
       const places = await tx.place.findMany({
-        where: { id: { in: placeIds }, salleId: seance.salleId, active: true },
+        where: { id: { in: placeIds }, ...placesDeLaSeance(seance.salleId, seance.creeeLe) },
         select: { id: true },
       });
       if (places.length !== placeIds.length) {

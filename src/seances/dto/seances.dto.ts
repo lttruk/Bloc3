@@ -47,6 +47,8 @@ export class SeanceDto {
   @ApiProperty() fin!: Date;
   @ApiProperty({ enum: Version }) version!: Version;
   @ApiProperty() festival!: boolean;
+  @ApiProperty({ nullable: true, description: 'Ouverture de la vente en ligne (US-7.2)' })
+  ouvertureVente!: Date | null;
   @ApiProperty({ type: FilmResumeDto }) film!: FilmResumeDto;
   @ApiProperty({ type: SalleResumeDto }) salle!: SalleResumeDto;
 }

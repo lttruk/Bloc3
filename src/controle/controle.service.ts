@@ -20,7 +20,7 @@ const SELECTION_BILLET = {
     select: { debut: true, film: { select: { titre: true } }, salle: { select: { nom: true } } },
   },
   reservation: {
-    select: { statut: true, utilisateur: { select: { prenom: true, nom: true } } },
+    select: { statut: true, canal: true, utilisateur: { select: { prenom: true, nom: true } } },
   },
 } satisfies Prisma.BilletSelect;
 
@@ -47,7 +47,10 @@ function presenter(b: BilletLu, scanneLe: Date | null = b.scanneLe): BilletContr
     place: `${b.place.rangee}${b.place.numero}`,
     tarif: b.tarif.libelle,
     justificatif: b.tarif.justificatifRequis ? b.tarif.libelle : null,
-    titulaire: `${b.reservation.utilisateur.prenom} ${b.reservation.utilisateur.nom}`,
+    titulaire:
+      b.reservation.canal === 'GUICHET'
+        ? 'Vente au guichet'
+        : `${b.reservation.utilisateur.prenom} ${b.reservation.utilisateur.nom}`,
     scanneLe,
   };
 }

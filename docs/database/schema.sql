@@ -26,6 +26,7 @@ CREATE TABLE film (
   duree_minutes  SMALLINT UNSIGNED NOT NULL,
   genre          VARCHAR(50) NULL,
   classification VARCHAR(30) NULL,
+  bande_annonce_url VARCHAR(500) NULL,
   statut         ENUM('BROUILLON','PUBLIE','ARCHIVE') NOT NULL DEFAULT 'BROUILLON',
   CONSTRAINT chk_film_duree CHECK (duree_minutes > 0)
 ) ENGINE=InnoDB;
@@ -144,4 +145,50 @@ CREATE TABLE journal_admin (
   KEY idx_journal_date (cree_le),
   CONSTRAINT fk_journal_utilisateur FOREIGN KEY (utilisateur_id)
     REFERENCES utilisateur(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+-- Les places existantes font partie de toutes les configurations passées : la colonne est
+-- créée avec une date ancienne, qui s'applique aux lignes déjà présentes...
+ALTER TABLE place
+  ADD COLUMN ajoutee_le DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00',
+  ADD COLUMN retiree_le DATETIME NULL;
+
+-- ... puis les nouvelles places sont datées à leur création.
+ALTER TABLE place MODIFY ajoutee_le DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- Les places déjà désactivées n'appartiennent à aucune configuration.
+UPDATE place SET retiree_le = '2000-01-01 00:00:00' WHERE active = 0;
+
+ALTER TABLE seance ADD COLUMN creee_le DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE journal_admin MODIFY entite ENUM('FILM','SEANCE','TARIF','SALLE') NOT NULL;
+
+-- US-2.2 : blocage temporaire après 5 échecs, journal des connexions et jetons de rafraîchissement
+ALTER TABLE utilisateur
+  ADD COLUMN echecs_connexion TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  ADD COLUMN bloque_jusqu_a DATETIME NULL;
+
+CREATE TABLE journal_connexion (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  utilisateur_id INT UNSIGNED NULL,
+  resultat       ENUM('SUCCES','ECHEC','BLOQUE') NOT NULL,
+  ip_tronquee    VARCHAR(45) NULL,
+  cree_le        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_journal_connexion_utilisateur (utilisateur_id, cree_le),
+  KEY idx_journal_connexion_date (cree_le),
+  CONSTRAINT fk_journal_connexion_utilisateur FOREIGN KEY (utilisateur_id)
+    REFERENCES utilisateur(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE jeton_rafraichissement (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  utilisateur_id INT UNSIGNED NOT NULL,
+  empreinte      CHAR(64) NOT NULL,
+  expire_le      DATETIME NOT NULL,
+  revoque_le     DATETIME NULL,
+  cree_le        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_jeton_empreinte (empreinte),
+  KEY idx_jeton_utilisateur (utilisateur_id),
+  CONSTRAINT fk_jeton_utilisateur FOREIGN KEY (utilisateur_id)
+    REFERENCES utilisateur(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

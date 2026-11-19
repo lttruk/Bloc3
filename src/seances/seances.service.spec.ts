@@ -61,7 +61,8 @@ describe('SeancesService', () => {
   });
 
   describe('planDeSalle', () => {
-    const seance = { id: 5, salleId: 3, titre: 'Hors Ligne' };
+    const creeeLe = new Date('2027-03-01T10:00:00Z');
+    const seance = { id: 5, salleId: 3, creeeLe, titre: 'Hors Ligne' };
 
     it('indique pour chaque place si elle est libre, en cours de réservation ou occupée', async () => {
       prisma.seance.findFirst.mockResolvedValue(seance);
@@ -80,7 +81,11 @@ describe('SeancesService', () => {
 
       const plan = await service.planDeSalle(5);
 
-      expect(prisma.place.findMany.mock.calls[0][0].where).toEqual({ salleId: 3, active: true });
+      expect(prisma.place.findMany.mock.calls[0][0].where).toEqual({
+        salleId: 3,
+        ajouteeLe: { lte: creeeLe },
+        OR: [{ retireeLe: null }, { retireeLe: { gt: creeeLe } }],
+      });
       expect(prisma.billet.findMany.mock.calls[0][0].where).toEqual({
         seanceId: 5,
         statut: { not: 'ANNULE' },
