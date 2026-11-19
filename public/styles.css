@@ -294,3 +294,30 @@ footer { text-align: center; color: #80858f; font-size: .78rem; padding: 30px; b
 /* ---------- Paramétrage : salles (US-7.2) ---------- */
 .champ-config { background: #f4f4f5; color: #1c1d22; border: 0; padding: 8px 10px; font-size: .95rem; width: 100%; max-width: 220px; }
 .film .bouton:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---------- Fiche film (US-1.2) ---------- */
+.infos h3 .lien-titre { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-transform: inherit; text-align: left; cursor: pointer; }
+.infos h3 .lien-titre:hover { text-decoration: underline; text-decoration-color: var(--rouge); }
+.lien-fiche { margin-top: 8px; font-size: .8rem; }
+#fenetre-film { width: min(860px, 96vw); max-height: 92vh; padding: 24px; overflow-y: auto; }
+.fiche-entete { display: grid; grid-template-columns: 180px 1fr auto; gap: 22px; align-items: start; }
+#fiche-affiche .affiche { aspect-ratio: 2 / 3; cursor: default; }
+#fiche-affiche .titre-affiche { font-size: 1.3rem; }
+.fiche-infos h2 { margin: 4px 0 6px; font-size: 1.8rem; font-weight: 800; text-transform: uppercase; line-height: 1.05; }
+.fiche-detail { color: var(--texte-doux); font-weight: 600; margin: 0 0 12px; }
+.fiche-tarifs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.fiche-tarifs span { border: 1px solid var(--trait); padding: 4px 10px; font-size: .8rem; }
+.fiche-video { margin: 22px 0 6px; }
+.fiche-video iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; background: #000; }
+.fiche-video .doux { font-size: .88rem; }
+.fiche-intertitre { text-transform: uppercase; font-weight: 800; margin: 22px 0 8px; }
+.fiche-jour { margin: 16px 0 6px; color: var(--or); font-weight: 800; text-transform: capitalize; font-size: .9rem; }
+.fiche-seance { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--trait); }
+.fiche-seance .heure { font-size: 1.15rem; font-weight: 800; min-width: 64px; }
+.fiche-seance .quoi { flex: 1; color: var(--texte-doux); font-size: .88rem; }
+.fiche-seance .bouton { padding: 8px 16px; }
+.dispo { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; color: #fff; }
+.dispo.DISPONIBLE { background: #2f9e63; }
+.dispo.DERNIERES_PLACES { background: #c77b12; }
+.dispo.COMPLET { background: #5b5f69; }
+@media (max-width: 640px) { .fiche-entete { grid-template-columns: 1fr; } #fiche-affiche { max-width: 160px; } .fermer-fiche { justify-self: end; grid-row: 1; } }

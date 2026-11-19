@@ -26,6 +26,7 @@ CREATE TABLE film (
   duree_minutes  SMALLINT UNSIGNED NOT NULL,
   genre          VARCHAR(50) NULL,
   classification VARCHAR(30) NULL,
+  bande_annonce_url VARCHAR(500) NULL,
   statut         ENUM('BROUILLON','PUBLIE','ARCHIVE') NOT NULL DEFAULT 'BROUILLON',
   CONSTRAINT chk_film_duree CHECK (duree_minutes > 0)
 ) ENGINE=InnoDB;

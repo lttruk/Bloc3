@@ -91,14 +91,15 @@ model Utilisateur {
 }
 
 model Film {
-  id             Int        @id @default(autoincrement()) @db.UnsignedInt
-  titre          String     @db.VarChar(200)
-  synopsis       String?    @db.Text
-  dureeMinutes   Int        @map("duree_minutes") @db.UnsignedSmallInt
-  genre          String?    @db.VarChar(50)
-  classification String?    @db.VarChar(30)
-  statut         StatutFilm @default(BROUILLON)
-  seances        Seance[]
+  id              Int        @id @default(autoincrement()) @db.UnsignedInt
+  titre           String     @db.VarChar(200)
+  synopsis        String?    @db.Text
+  dureeMinutes    Int        @map("duree_minutes") @db.UnsignedSmallInt
+  genre           String?    @db.VarChar(50)
+  classification  String?    @db.VarChar(30)
+  bandeAnnonceUrl String?    @map("bande_annonce_url") @db.VarChar(500)
+  statut          StatutFilm @default(BROUILLON)
+  seances         Seance[]
 
   @@map("film")
 }
