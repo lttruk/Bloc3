@@ -66,9 +66,10 @@
   }
 
   function afficher(vue) {
-    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin']) $(v).hidden = v !== vue;
+    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin', 'vue-controle']) $(v).hidden = v !== vue;
     if (vue !== 'vue-salle') clearInterval(etat.sondage);
     if (vue !== 'vue-mes-reservations') clearInterval(etat.minuteurListe);
+    if (vue !== 'vue-controle' && scan.flux) arreterCamera();
     window.scrollTo({ top: 0 });
   }
 
@@ -363,6 +364,12 @@
       places.append(` · ${r.billets.map((x) => x.tarif).join(', ')}`);
       carte.querySelector('.ref').textContent = `Référence ${r.reference}`;
       carte.querySelector('.montant').textContent = euros(r.total);
+      if (r.statut === 'CONFIRMEE') {
+        const voirBillets = document.createElement('button');
+        voirBillets.type = 'button'; voirBillets.className = 'bouton'; voirBillets.textContent = 'Mes billets';
+        voirBillets.addEventListener('click', () => void ouvrirBillets(r.reference));
+        carte.querySelector('.boutons').append(voirBillets);
+      }
       if (r.statut === 'EN_ATTENTE') {
         comptes.push({ el: carte.querySelector('.reste'), fin: new Date(r.expireLe).getTime() });
         const voir = document.createElement('button');
@@ -763,6 +770,178 @@
   $('filtre-admin-jour').addEventListener('change', () => void chargerSeancesAdmin());
   $('filtre-admin-salle').addEventListener('change', () => void chargerSeancesAdmin());
 
+  // ---------- Billets dématérialisés avec QR code (US-5.1) ----------
+  async function ouvrirBillets(reference) {
+    let billets;
+    try { billets = await api(`/reservations/${encodeURIComponent(reference)}/billets`); } catch (e) { notifier(e.message); return; }
+    const liste = $('liste-billets');
+    liste.replaceChildren();
+    for (const b of billets) {
+      const carte = document.createElement('article');
+      carte.className = `billet ${b.statut}`;
+      carte.innerHTML = `
+        <div class="qr"></div>
+        <div class="contenu">
+          <div class="surtitre">Le Grand Cinéma · E-billet</div>
+          <h4></h4>
+          <div class="quand"></div>
+          <div class="ligne-place"></div>
+          <div class="titulaire"></div>
+          <div class="justificatif"></div>
+          <div class="etat"></div>
+          <div class="boutons"></div>
+        </div>`;
+      // Le SVG est produit par l'API (bibliothèque qrcode) à partir du code signé.
+      carte.querySelector('.qr').innerHTML = b.qrSvg;
+      carte.querySelector('h4').textContent = b.film;
+      carte.querySelector('.quand').textContent = `${fmtJourLong(b.debut)} à ${fmtHeure(b.debut)} · ${b.salle} · ${b.version}`;
+      carte.querySelector('.ligne-place').textContent = `Place ${b.place}${b.pmr ? ' (PMR)' : ''} · ${b.tarif} · ${euros(b.prix)}`;
+      carte.querySelector('.titulaire').textContent = `Titulaire : ${b.titulaire}`;
+      carte.querySelector('.justificatif').textContent = b.justificatifRequis ? `Tarif ${b.tarif} : justificatif à présenter à l’entrée.` : '';
+      carte.querySelector('.etat').textContent = b.statut === 'UTILISE' ? `Utilisé le ${fmtDate(b.scanneLe)} à ${fmtHeure(b.scanneLe)}` : b.statut === 'ANNULE' ? 'Billet annulé' : '';
+      const telecharger = document.createElement('a');
+      telecharger.className = 'bouton discret'; telecharger.textContent = 'Télécharger le QR code';
+      telecharger.href = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(b.qrSvg)}`;
+      telecharger.download = `billet-${reference}-${b.place}.svg`;
+      const imprimer = document.createElement('button');
+      imprimer.type = 'button'; imprimer.className = 'bouton discret'; imprimer.textContent = 'Imprimer';
+      imprimer.addEventListener('click', () => imprimerBillet(carte));
+      carte.querySelector('.boutons').append(telecharger, imprimer);
+      liste.append(carte);
+    }
+    $('fenetre-billets').showModal();
+  }
+
+  function imprimerBillet(carte) {
+    const fenetre = window.open('', '_blank', 'width=720,height=900');
+    if (!fenetre) { notifier('Autorisez les fenêtres pour imprimer le billet.'); return; }
+    const copie = carte.cloneNode(true);
+    copie.querySelector('.boutons').remove();
+    fenetre.document.title = 'Billet – Le Grand Cinéma';
+    const style = fenetre.document.createElement('style');
+    style.textContent = 'body{font-family:Arial,sans-serif;padding:24px}.billet{display:flex;gap:24px;border:2px solid #222;padding:20px;max-width:640px}.qr svg{width:220px;height:220px}h4{font-size:22px;margin:6px 0}.surtitre{color:#b4211d;font-weight:bold;text-transform:uppercase;font-size:12px}div{margin:4px 0}';
+    fenetre.document.head.append(style);
+    fenetre.document.body.append(fenetre.document.importNode(copie, true));
+    fenetre.focus();
+    fenetre.print();
+  }
+
+  $('btn-fermer-billets').addEventListener('click', () => $('fenetre-billets').close());
+  $('fenetre-billets').addEventListener('click', (ev) => { if (ev.target === ev.currentTarget) ev.currentTarget.close(); });
+
+  // ---------- Contrôle des billets à l'entrée (US-6.1) ----------
+  const ROLES_CONTROLE = ['CONTROLEUR', 'ADMIN'];
+  const MOTIFS_SCAN = { FALSIFIE: 'Billet refusé', ANNULE: 'Billet annulé', DEJA_UTILISE: 'Déjà utilisé', AUTRE_SEANCE: 'Autre séance' };
+  const scan = { flux: null, minuteur: null, dernierCode: null, dernierInstant: 0, enCours: false, effacement: null };
+  const peutControler = () => Boolean(etat.jeton) && !etat.demo && ROLES_CONTROLE.includes(roleDuJeton(etat.jeton));
+
+  async function ouvrirControle() {
+    if (!peutControler()) { notifier('Accès réservé aux contrôleurs.'); return; }
+    let seances;
+    try { seances = await api('/controle/seances'); } catch (e) { erreurAdmin(e); return; }
+    const choix = $('controle-seance');
+    choix.replaceChildren(
+      new Option('Toutes les séances (pas de contrôle de séance)', ''),
+      ...seances.map((s) => new Option(`${fmtHeure(s.debut)} · ${s.film} · ${s.salle}`, s.id)),
+    );
+    if (seances.length) choix.value = String(seances[0].id);
+    afficherResultat(null);
+    afficher('vue-controle');
+  }
+
+  function chargerDecodeur() {
+    if (window.jsQR) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/vendor/jsqr/jsQR.js';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Décodeur de QR code indisponible.'));
+      document.head.append(script);
+    });
+  }
+
+  async function demarrerCamera() {
+    if (scan.flux) { arreterCamera(); return; }
+    try {
+      await chargerDecodeur();
+      scan.flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    } catch (e) {
+      notifier(e.name === 'NotAllowedError' ? 'Autorisez l’accès à la caméra pour scanner.' : e.message || 'Caméra indisponible.');
+      return;
+    }
+    const video = $('controle-video');
+    video.srcObject = scan.flux;
+    await video.play();
+    $('btn-camera').textContent = 'Arrêter la caméra';
+    $('controle-etat-camera').textContent = 'Caméra active : présentez le QR code dans le cadre';
+    const toile = document.createElement('canvas');
+    const contexte = toile.getContext('2d', { willReadFrequently: true });
+    scan.minuteur = setInterval(() => {
+      if (!video.videoWidth || scan.enCours) return;
+      toile.width = video.videoWidth; toile.height = video.videoHeight;
+      contexte.drawImage(video, 0, 0);
+      const image = contexte.getImageData(0, 0, toile.width, toile.height);
+      const lu = window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+      // Un même code lu en continu n'est envoyé qu'une fois toutes les 4 secondes.
+      if (lu?.data && (lu.data !== scan.dernierCode || Date.now() - scan.dernierInstant > 4000)) {
+        scan.dernierCode = lu.data; scan.dernierInstant = Date.now();
+        void controlerCode(lu.data);
+      }
+    }, 250);
+  }
+
+  function arreterCamera() {
+    clearInterval(scan.minuteur);
+    scan.flux?.getTracks().forEach((piste) => piste.stop());
+    scan.flux = null;
+    $('controle-video').srcObject = null;
+    $('btn-camera').textContent = 'Démarrer la caméra';
+    $('controle-etat-camera').textContent = 'Caméra arrêtée';
+  }
+
+  async function controlerCode(code) {
+    scan.enCours = true;
+    try {
+      const corps = { code };
+      if ($('controle-seance').value) corps.seanceId = Number($('controle-seance').value);
+      afficherResultat(await api('/controle/scan', { method: 'POST', body: JSON.stringify(corps) }));
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) { arreterCamera(); erreurAdmin(e); } else notifier(e.message);
+    } finally {
+      scan.enCours = false;
+    }
+  }
+
+  function afficherResultat(r) {
+    const zone = $('resultat-scan');
+    clearTimeout(scan.effacement);
+    zone.className = `resultat-scan ${r ? (r.valide ? 'valide' : 'refuse') : 'attente'}`;
+    $('scan-verdict').textContent = r ? (r.valide ? 'Entrée autorisée' : MOTIFS_SCAN[r.motif] ?? 'Billet refusé') : 'En attente d’un billet';
+    $('scan-message').textContent = r?.message ?? '';
+    const infos = $('scan-infos');
+    infos.replaceChildren();
+    if (r?.billet) {
+      const lignes = [['Film', r.billet.film], ['Séance', `${fmtDate(r.billet.debut)} ${fmtHeure(r.billet.debut)}`], ['Salle', r.billet.salle], ['Place', r.billet.place], ['Tarif', r.billet.tarif], ['Titulaire', r.billet.titulaire]];
+      if (r.billet.justificatif) lignes.push(['À vérifier', `Justificatif tarif ${r.billet.justificatif}`]);
+      for (const [terme, valeur] of lignes) {
+        const dt = document.createElement('dt'); dt.textContent = terme;
+        const dd = document.createElement('dd'); dd.textContent = valeur;
+        infos.append(dt, dd);
+      }
+    }
+    if (r) scan.effacement = setTimeout(() => afficherResultat(null), 6000);
+  }
+
+  $('btn-controle').addEventListener('click', () => void ouvrirControle());
+  $('btn-retour-controle').addEventListener('click', () => { arreterCamera(); afficher('vue-programme'); });
+  $('btn-camera').addEventListener('click', () => void demarrerCamera());
+  $('form-code-manuel').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const champ = ev.target.elements.code;
+    if (champ.value.trim()) void controlerCode(champ.value.trim());
+    champ.value = '';
+  });
+
   // ---------- Compte ----------
   function ouvrirAuth(inscription) {
     $('onglet-connexion').setAttribute('aria-selected', String(!inscription));
@@ -793,6 +972,7 @@
     memoriserSession();
     $('btn-mes-reservations').hidden = !etat.jeton;
     $('btn-admin').hidden = !peutProgrammer();
+    $('btn-controle').hidden = !peutControler();
     const connecte = Boolean(etat.jeton);
     $('utilisateur').hidden = !connecte;
     $('utilisateur').textContent = connecte ? etat.email : '';

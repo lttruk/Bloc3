@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { AppModule } from './app.module';
 import { configurerApplication } from './configuration-app';
 
@@ -13,6 +13,8 @@ async function bootstrap(): Promise<void> {
 
   // Site web de réservation (HTML, CSS et JavaScript statiques) servi par l'API elle-même
   app.useStaticAssets(join(__dirname, '..', 'public'));
+  // Décodeur de QR code utilisé par l'écran de contrôle (US-6.1), servi depuis node_modules
+  app.useStaticAssets(dirname(require.resolve('jsqr')), { prefix: '/vendor/jsqr/' });
 
   const config = new DocumentBuilder()
     .setTitle('Le Grand Cinéma – API')

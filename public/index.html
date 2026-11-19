@@ -12,6 +12,7 @@
   <div class="recherche"><input type="search" id="recherche" placeholder="Film, genre…" aria-label="Rechercher un film"></div>
   <div class="compte">
     <span id="utilisateur" hidden></span>
+    <button class="bouton discret" id="btn-controle" type="button" hidden>Contrôle</button>
     <button class="bouton discret" id="btn-admin" type="button" hidden>Administration</button>
     <button class="bouton discret" id="btn-mes-reservations" type="button" hidden>Mes réservations</button>
     <button class="bouton discret" id="btn-connexion" type="button">Se connecter</button>
@@ -179,6 +180,40 @@
   </main>
 </section>
 
+<!-- Vue contrôle des billets à l'entrée de la salle (US-6.1) -->
+<section id="vue-controle" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour-controle" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut">Contrôle d'accès</div>
+      <h2>Scanner les billets</h2>
+      <div class="detail">Choisissez la séance contrôlée, puis présentez le QR code du billet devant la caméra.</div>
+    </div>
+    <div class="controle">
+      <div class="bloc-admin">
+        <label>Séance contrôlée<select id="controle-seance"></select></label>
+        <div class="camera">
+          <video id="controle-video" playsinline muted></video>
+          <div class="viseur" aria-hidden="true"></div>
+          <p class="doux petit" id="controle-etat-camera">Caméra arrêtée</p>
+        </div>
+        <div class="actions-form">
+          <button class="bouton" id="btn-camera" type="button">Démarrer la caméra</button>
+        </div>
+        <form id="form-code-manuel" class="saisie-code">
+          <label>Ou saisir le code du billet<input type="text" name="code" autocomplete="off" maxlength="512"></label>
+          <button class="bouton discret" type="submit">Contrôler</button>
+        </form>
+      </div>
+      <div class="resultat-scan attente" id="resultat-scan" aria-live="assertive">
+        <div class="verdict" id="scan-verdict">En attente d'un billet</div>
+        <div class="message" id="scan-message"></div>
+        <dl class="infos-billet" id="scan-infos"></dl>
+      </div>
+    </div>
+  </main>
+</section>
+
 <footer>Le Grand Cinéma · Réservation en ligne · Vos données sont traitées conformément au RGPD</footer>
 
 <dialog id="fenetre-auth" aria-label="Connexion ou création de compte">
@@ -202,6 +237,14 @@
     <p class="erreur" id="erreur-inscription" role="alert"></p>
     <button class="bouton" type="submit">Créer mon compte</button>
   </form>
+</dialog>
+
+<dialog id="fenetre-billets" aria-label="Mes billets">
+  <div class="entete-billets">
+    <h3>Mes billets</h3>
+    <button class="lien" type="button" id="btn-fermer-billets">Fermer</button>
+  </div>
+  <div id="liste-billets"></div>
 </dialog>
 
 <div class="toast" id="toast" role="status"></div>
