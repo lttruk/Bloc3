@@ -50,7 +50,6 @@
       .then(async (r) => {
         if (!r.ok) return false;
         etat.jeton = (await r.json()).accessToken;
-        memoriserSession();
         return true;
       })
       .catch(() => false)
@@ -1320,23 +1319,13 @@
     if (!$('fenetre-auth').open) $('fenetre-auth').showModal();
   }
 
-  // La session est conservée dans l'onglet (sessionStorage) pour survivre à un rechargement de la page.
-  function memoriserSession() {
-    try {
-      if (etat.jeton && !etat.demo) sessionStorage.setItem('session', JSON.stringify({ jeton: etat.jeton, email: etat.email }));
-      else sessionStorage.removeItem('session');
-    } catch { /* stockage indisponible : la session reste en mémoire */ }
-  }
-
-  function restaurerSession() {
-    try {
-      const s = JSON.parse(sessionStorage.getItem('session') ?? 'null');
-      if (s?.jeton) { etat.jeton = s.jeton; etat.email = s.email; }
-    } catch { /* rien à restaurer */ }
+  // US-2.2 : le jeton d'accès reste en mémoire, jamais dans le stockage du navigateur. Après un
+  // rechargement, la session reprend grâce au cookie httpOnly (voir reprendreSession).
+  function nettoyerAncienneSession() {
+    try { sessionStorage.removeItem('session'); } catch { /* stockage indisponible */ }
   }
 
   function majCompte() {
-    memoriserSession();
     $('btn-mes-reservations').hidden = !etat.jeton;
     $('btn-admin').hidden = !peutProgrammer();
     $('btn-controle').hidden = !peutControler();
@@ -1366,7 +1355,11 @@
   async function reprendreSession() {
     let possible = false;
     try { possible = localStorage.getItem('sessionOuverte') === '1'; } catch { /* stockage indisponible */ }
-    if (etat.jeton || !possible || !(await renouvelerSession())) return;
+    if (etat.jeton || !possible) return;
+    if (!(await renouvelerSession())) {
+      try { localStorage.removeItem('sessionOuverte'); } catch { /* stockage indisponible */ }
+      return;
+    }
     try { etat.email = (await api('/auth/moi')).email; } catch { /* l'e-mail s'affichera à la prochaine connexion */ }
     majCompte();
   }
@@ -1411,10 +1404,10 @@
   $('btn-reserver').addEventListener('click', () => void reserver());
   $('recherche').addEventListener('input', dessinerProgramme);
 
-  restaurerSession();
+  nettoyerAncienneSession();
   majCompte();
-  void reprendreSession();
   dessinerJours();
   void chargerProgramme();
-  void traiterRetourPaiement();
+  // Le retour du paiement a besoin de la session : elle est reprise d'abord.
+  void reprendreSession().finally(() => void traiterRetourPaiement());
 })();
