@@ -75,17 +75,21 @@ enum StatutPaiement {
 }
 
 model Utilisateur {
-  id                 Int           @id @default(autoincrement()) @db.UnsignedInt
-  nom                String        @db.VarChar(100)
-  prenom             String        @db.VarChar(100)
-  email              String        @unique(map: "email") @db.VarChar(254)
-  motDePasseHash     String        @map("mot_de_passe_hash") @db.VarChar(255)
-  role               Role          @default(CLIENT)
-  consentementRgpdLe DateTime      @map("consentement_rgpd_le") @db.DateTime(0)
-  creeLe             DateTime      @default(now()) @map("cree_le") @db.DateTime(0)
-  majLe              DateTime      @default(now()) @updatedAt @map("maj_le") @db.DateTime(0)
-  reservations       Reservation[]
-  journal            JournalAdmin[]
+  id                     Int                     @id @default(autoincrement()) @db.UnsignedInt
+  nom                    String                  @db.VarChar(100)
+  prenom                 String                  @db.VarChar(100)
+  email                  String                  @unique(map: "email") @db.VarChar(254)
+  motDePasseHash         String                  @map("mot_de_passe_hash") @db.VarChar(255)
+  role                   Role                    @default(CLIENT)
+  consentementRgpdLe     DateTime                @map("consentement_rgpd_le") @db.DateTime(0)
+  echecsConnexion        Int                     @default(0) @map("echecs_connexion") @db.UnsignedTinyInt
+  bloqueJusquA           DateTime?               @map("bloque_jusqu_a") @db.DateTime(0)
+  creeLe                 DateTime                @default(now()) @map("cree_le") @db.DateTime(0)
+  majLe                  DateTime                @default(now()) @updatedAt @map("maj_le") @db.DateTime(0)
+  reservations           Reservation[]
+  journal                JournalAdmin[]
+  connexions             JournalConnexion[]
+  jetonsRafraichissement JetonRafraichissement[]
 
   @@map("utilisateur")
 }
@@ -239,4 +243,38 @@ model JournalAdmin {
   @@index([creeLe], map: "idx_journal_date")
   @@index([utilisateurId], map: "fk_journal_utilisateur")
   @@map("journal_admin")
+}
+
+enum ResultatConnexion {
+  SUCCES
+  ECHEC
+  BLOQUE
+}
+
+/// Journal des tentatives de connexion (US-2.2) : aucune donnée sensible, IP tronquée.
+model JournalConnexion {
+  id            Int               @id @default(autoincrement()) @db.UnsignedInt
+  utilisateurId Int?              @map("utilisateur_id") @db.UnsignedInt
+  resultat      ResultatConnexion
+  ipTronquee    String?           @map("ip_tronquee") @db.VarChar(45)
+  creeLe        DateTime          @default(now()) @map("cree_le") @db.DateTime(0)
+  utilisateur   Utilisateur?      @relation(fields: [utilisateurId], references: [id], onDelete: SetNull, map: "fk_journal_connexion_utilisateur")
+
+  @@index([utilisateurId, creeLe], map: "idx_journal_connexion_utilisateur")
+  @@index([creeLe], map: "idx_journal_connexion_date")
+  @@map("journal_connexion")
+}
+
+/// Jetons de rafraichissement (US-2.2) : seule leur empreinte SHA-256 est stockée.
+model JetonRafraichissement {
+  id            Int         @id @default(autoincrement()) @db.UnsignedInt
+  utilisateurId Int         @map("utilisateur_id") @db.UnsignedInt
+  empreinte     String      @unique(map: "uq_jeton_empreinte") @db.Char(64)
+  expireLe      DateTime    @map("expire_le") @db.DateTime(0)
+  revoqueLe     DateTime?   @map("revoque_le") @db.DateTime(0)
+  creeLe        DateTime    @default(now()) @map("cree_le") @db.DateTime(0)
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade, map: "fk_jeton_utilisateur")
+
+  @@index([utilisateurId], map: "idx_jeton_utilisateur")
+  @@map("jeton_rafraichissement")
 }
