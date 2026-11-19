@@ -111,6 +111,7 @@ async function main() {
   const personnel: Array<[string, string, Role, string]> = [
     ['SEED_PROG_EMAIL', 'SEED_PROG_PASSWORD', Role.PROGRAMMATION, 'Programmation'],
     ['SEED_CONTROLEUR_EMAIL', 'SEED_CONTROLEUR_PASSWORD', Role.CONTROLEUR, 'Contrôleur'],
+    ['SEED_CAISSIER_EMAIL', 'SEED_CAISSIER_PASSWORD', Role.CAISSIER, 'Caisse'],
   ];
   for (const [email, motDePasse, role, prenom] of personnel) {
     if (process.env[email] && process.env[motDePasse]) {

@@ -12,6 +12,7 @@
   <div class="recherche"><input type="search" id="recherche" placeholder="Film, genre…" aria-label="Rechercher un film"></div>
   <div class="compte">
     <span id="utilisateur" hidden></span>
+    <button class="bouton discret" id="btn-guichet" type="button" hidden>Guichet</button>
     <button class="bouton discret" id="btn-controle" type="button" hidden>Contrôle</button>
     <button class="bouton discret" id="btn-admin" type="button" hidden>Administration</button>
     <button class="bouton discret" id="btn-mes-reservations" type="button" hidden>Mes réservations</button>
@@ -59,8 +60,11 @@
         <div class="regle">10 places au maximum par réservation</div>
         <div id="lignes"></div>
         <div class="total"><span>Total</span><strong id="total">0,00 €</strong></div>
+        <div class="bloc-guichet" id="bloc-guichet" hidden>
+          <label>Encaissement<select id="mode-paiement"><option value="CARTE">Carte bancaire</option><option value="ESPECES">Espèces</option></select></label>
+        </div>
         <button class="bouton" id="btn-reserver" type="button" disabled>Bloquer mes places</button>
-        <p class="mention">Vos places sont conservées 10 minutes, le temps de finaliser.</p>
+        <p class="mention" id="mention-panier">Vos places sont conservées 10 minutes, le temps de finaliser.</p>
       </aside>
     </div>
   </main>
@@ -180,6 +184,26 @@
   </main>
 </section>
 
+<!-- Vue guichet : vente au comptoir avec le même système de réservation (US-7.3) -->
+<section id="vue-guichet" hidden>
+  <main>
+    <div class="titre-page">
+      <button class="lien" id="btn-retour-guichet" type="button">← Retour à l'affiche</button>
+      <div class="surtitre espace-haut">Guichet</div>
+      <h2>Vente au comptoir</h2>
+      <div class="detail">Les places vendues ici sont aussitôt indisponibles sur le site, et inversement. Chaque billet porte le même QR code signé qu'un billet acheté en ligne.</div>
+    </div>
+    <div class="bilan-guichet" id="bilan-guichet" aria-live="polite"></div>
+    <div class="bloc-admin">
+      <h3>Séances en vente</h3>
+      <div class="defilement"><table class="tableau" id="table-guichet">
+        <thead><tr><th>Horaire</th><th>Film</th><th>Salle</th><th>Version</th><th>Places libres</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </main>
+</section>
+
 <!-- Vue contrôle des billets à l'entrée de la salle (US-6.1) -->
 <section id="vue-controle" hidden>
   <main>
@@ -241,8 +265,11 @@
 
 <dialog id="fenetre-billets" aria-label="Mes billets">
   <div class="entete-billets">
-    <h3>Mes billets</h3>
-    <button class="lien" type="button" id="btn-fermer-billets">Fermer</button>
+    <h3 id="titre-billets">Mes billets</h3>
+    <div class="actions-form">
+      <button class="bouton discret" type="button" id="btn-imprimer-tous" hidden>Imprimer tous les billets</button>
+      <button class="lien" type="button" id="btn-fermer-billets">Fermer</button>
+    </div>
   </div>
   <div id="liste-billets"></div>
 </dialog>

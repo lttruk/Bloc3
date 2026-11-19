@@ -3,7 +3,7 @@
   const $ = (id) => document.getElementById(id);
   const MAX_PLACES = 10;
   const ACTUALISATION_MS = 5000;
-  const etat = { demoReservations: [], minuteurListe: null, jeton: null, email: null, demo: false, jour: 0, seances: [], seance: null, places: [], tarifs: [], selection: new Map(), minuteur: null, sondage: null };
+  const etat = { modeGuichet: false, demoReservations: [], minuteurListe: null, jeton: null, email: null, demo: false, jour: 0, seances: [], seance: null, places: [], tarifs: [], selection: new Map(), minuteur: null, sondage: null };
   const euros = (n) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   const debutJour = (decalage) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + decalage); return d; };
   const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -66,7 +66,7 @@
   }
 
   function afficher(vue) {
-    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin', 'vue-controle']) $(v).hidden = v !== vue;
+    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin', 'vue-controle', 'vue-guichet']) $(v).hidden = v !== vue;
     if (vue !== 'vue-salle') clearInterval(etat.sondage);
     if (vue !== 'vue-mes-reservations') clearInterval(etat.minuteurListe);
     if (vue !== 'vue-controle' && scan.flux) arreterCamera();
@@ -180,7 +180,13 @@
     }
   }
 
-  async function ouvrirSeance(seance) {
+  async function ouvrirSeance(seance, { guichet = false } = {}) {
+    etat.modeGuichet = guichet;
+    $('bloc-guichet').hidden = !guichet;
+    $('mention-panier').textContent = guichet
+      ? 'Les billets sont émis dès l’encaissement, avec leur QR code.'
+      : 'Vos places sont conservées 10 minutes, le temps de finaliser.';
+    $('btn-retour').textContent = guichet ? '← Retour au guichet' : '← Retour à l\'affiche';
     etat.seance = seance;
     etat.selection.clear();
     try { await chargerPlan(); } catch (e) { notifier(e.message); return; }
@@ -264,11 +270,13 @@
     $('total').textContent = euros(total);
     const n = etat.selection.size;
     $('btn-reserver').disabled = n === 0;
-    $('btn-reserver').textContent = n === 0 ? 'Bloquer mes places' : `Bloquer ${n} place${n > 1 ? 's' : ''}`;
+    if (etat.modeGuichet) $('btn-reserver').textContent = n === 0 ? 'Encaisser' : `Encaisser ${euros(total)}`;
+    else $('btn-reserver').textContent = n === 0 ? 'Bloquer mes places' : `Bloquer ${n} place${n > 1 ? 's' : ''}`;
   }
 
   // ---------- Réservation ----------
   async function reserver() {
+    if (etat.modeGuichet) { await vendreAuGuichet(); return; }
     if (!etat.jeton && !etat.demo) { ouvrirAuth(false); notifier('Connectez-vous pour réserver vos places.'); return; }
     const places = [...etat.selection.values()].map((c) => ({ placeId: c.place.id, tarifId: c.tarifId }));
     $('btn-reserver').disabled = true;
@@ -774,6 +782,12 @@
   async function ouvrirBillets(reference) {
     let billets;
     try { billets = await api(`/reservations/${encodeURIComponent(reference)}/billets`); } catch (e) { notifier(e.message); return; }
+    presenterBillets(billets, reference, 'Mes billets');
+  }
+
+  function presenterBillets(billets, reference, titre, { imprimerTous = false } = {}) {
+    $('titre-billets').textContent = titre;
+    $('btn-imprimer-tous').hidden = !imprimerTous;
     const liste = $('liste-billets');
     liste.replaceChildren();
     for (const b of billets) {
@@ -812,16 +826,19 @@
     $('fenetre-billets').showModal();
   }
 
-  function imprimerBillet(carte) {
+  function imprimerBillet(...cartes) {
     const fenetre = window.open('', '_blank', 'width=720,height=900');
     if (!fenetre) { notifier('Autorisez les fenêtres pour imprimer le billet.'); return; }
-    const copie = carte.cloneNode(true);
-    copie.querySelector('.boutons').remove();
     fenetre.document.title = 'Billet – Le Grand Cinéma';
     const style = fenetre.document.createElement('style');
     style.textContent = 'body{font-family:Arial,sans-serif;padding:24px}.billet{display:flex;gap:24px;border:2px solid #222;padding:20px;max-width:640px}.qr svg{width:220px;height:220px}h4{font-size:22px;margin:6px 0}.surtitre{color:#b4211d;font-weight:bold;text-transform:uppercase;font-size:12px}div{margin:4px 0}';
+    style.textContent += '.billet{page-break-after:always;margin-bottom:24px}';
     fenetre.document.head.append(style);
-    fenetre.document.body.append(fenetre.document.importNode(copie, true));
+    for (const carte of cartes) {
+      const copie = carte.cloneNode(true);
+      copie.querySelector('.boutons').remove();
+      fenetre.document.body.append(fenetre.document.importNode(copie, true));
+    }
     fenetre.focus();
     fenetre.print();
   }
@@ -942,6 +959,78 @@
     champ.value = '';
   });
 
+  // ---------- Guichet : vente au comptoir (US-7.3) ----------
+  const ROLES_GUICHET = ['CAISSIER', 'ADMIN'];
+  const MODES_PAIEMENT = { CARTE: 'carte bancaire', ESPECES: 'espèces' };
+  const peutVendre = () => Boolean(etat.jeton) && !etat.demo && ROLES_GUICHET.includes(roleDuJeton(etat.jeton));
+
+  async function ouvrirGuichet() {
+    if (!peutVendre()) { notifier('Accès réservé au personnel du guichet.'); return; }
+    let seances, bilan;
+    try { [seances, bilan] = await Promise.all([api('/guichet/seances'), api('/guichet/bilan')]); } catch (e) { erreurAdmin(e); return; }
+    etat.modeGuichet = false;
+    dessinerBilan(bilan);
+    const corps = $('table-guichet').tBodies[0];
+    corps.replaceChildren();
+    if (seances.length === 0) {
+      const tr = corps.insertRow(); const td = cellule(tr, 'Aucune séance en vente sur les 7 prochains jours.'); td.colSpan = 6; td.className = 'doux';
+    }
+    for (const s of seances) {
+      const tr = corps.insertRow();
+      cellule(tr, `${fmtDate(s.debut)} ${fmtHeure(s.debut)}`);
+      cellule(tr, s.film);
+      cellule(tr, s.salle);
+      cellule(tr, s.version);
+      cellule(tr, `${s.placesLibres} / ${s.capacite}`);
+      const actions = document.createElement('div'); actions.className = 'actions-ligne';
+      if (s.placesLibres > 0) {
+        actions.append(boutonAction('Vendre', () => ouvrirSeance(
+          { id: s.id, debut: s.debut, version: s.version, festival: false, film: { titre: s.film }, salle: { nom: s.salle } },
+          { guichet: true },
+        )));
+      } else actions.append(pastilleStatut('COMPLET', { COMPLET: 'Complet' }));
+      cellule(tr, actions);
+    }
+    afficher('vue-guichet');
+  }
+
+  function dessinerBilan(bilan) {
+    const zone = $('bilan-guichet');
+    zone.replaceChildren();
+    for (const c of bilan.canaux) {
+      const carte = document.createElement('div'); carte.className = 'chiffre-bilan';
+      const libelle = document.createElement('div'); libelle.className = 'surtitre'; libelle.textContent = c.canal === 'WEB' ? 'Vendu en ligne aujourd’hui' : 'Vendu au guichet aujourd’hui';
+      const valeur = document.createElement('div'); valeur.className = 'valeur'; valeur.textContent = `${c.billets} billet${c.billets > 1 ? 's' : ''}`;
+      const montant = document.createElement('div'); montant.className = 'doux'; montant.textContent = euros(c.montant);
+      carte.append(libelle, valeur, montant);
+      zone.append(carte);
+    }
+  }
+
+  async function vendreAuGuichet() {
+    const places = [...etat.selection.values()].map((c) => ({ placeId: c.place.id, tarifId: c.tarifId }));
+    const modePaiement = $('mode-paiement').value;
+    $('btn-reserver').disabled = true;
+    try {
+      const vente = await api(`/guichet/seances/${etat.seance.id}/ventes`, { method: 'POST', body: JSON.stringify({ places, modePaiement }) });
+      etat.selection.clear();
+      await chargerPlan().catch(() => {});
+      dessinerPlan();
+      majPanier();
+      presenterBillets(vente.billets, vente.reference, `Vente ${vente.reference} · ${euros(vente.total)} en ${MODES_PAIEMENT[vente.modePaiement]}`, { imprimerTous: true });
+      notifier('Vente enregistrée : billets prêts à imprimer.');
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) { erreurAdmin(e); return; }
+      notifier(e.status === 409 ? 'Une de ces places vient d’être vendue ailleurs : le plan a été actualisé.' : e.message);
+      if (e.status === 409) { await chargerPlan().catch(() => {}); dessinerPlan(); }
+      majPanier();
+    }
+  }
+
+  $('btn-guichet').addEventListener('click', () => void ouvrirGuichet());
+  $('btn-retour-guichet').addEventListener('click', () => afficher('vue-programme'));
+  $('btn-imprimer-tous').addEventListener('click', () => imprimerBillet(...document.querySelectorAll('#liste-billets .billet')));
+
   // ---------- Compte ----------
   function ouvrirAuth(inscription) {
     $('onglet-connexion').setAttribute('aria-selected', String(!inscription));
@@ -973,6 +1062,7 @@
     $('btn-mes-reservations').hidden = !etat.jeton;
     $('btn-admin').hidden = !peutProgrammer();
     $('btn-controle').hidden = !peutControler();
+    $('btn-guichet').hidden = !peutVendre();
     const connecte = Boolean(etat.jeton);
     $('utilisateur').hidden = !connecte;
     $('utilisateur').textContent = connecte ? etat.email : '';
@@ -1014,7 +1104,7 @@
   $('onglet-connexion').addEventListener('click', () => ouvrirAuth(false));
   $('onglet-inscription').addEventListener('click', () => ouvrirAuth(true));
   $('fenetre-auth').addEventListener('click', (ev) => { if (ev.target === ev.currentTarget) ev.currentTarget.close(); });
-  $('btn-retour').addEventListener('click', () => afficher('vue-programme'));
+  $('btn-retour').addEventListener('click', () => { if (etat.modeGuichet) void ouvrirGuichet(); else afficher('vue-programme'); });
   $('btn-nouvelle').addEventListener('click', () => { clearInterval(etat.minuteur); afficher('vue-programme'); });
   $('lien-accueil').addEventListener('click', (ev) => { ev.preventDefault(); afficher('vue-programme'); });
   $('btn-reserver').addEventListener('click', () => void reserver());
