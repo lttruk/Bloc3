@@ -63,6 +63,8 @@ enum StatutBillet {
 enum EntiteJournal {
   FILM
   SEANCE
+  TARIF
+  SALLE
 }
 
 enum StatutPaiement {
@@ -118,6 +120,9 @@ model Place {
   numero  Int       @db.UnsignedSmallInt
   type    TypePlace @default(STANDARD)
   active  Boolean   @default(true)
+  // US-7.2 : période pendant laquelle la place fait partie de la configuration de la salle
+  ajouteeLe DateTime  @default(now()) @map("ajoutee_le") @db.DateTime(0)
+  retireeLe DateTime? @map("retiree_le") @db.DateTime(0)
   salle   Salle     @relation(fields: [salleId], references: [id], onDelete: Restrict, map: "fk_place_salle")
   billets Billet[]
 
@@ -135,6 +140,8 @@ model Seance {
   ouvertureVente DateTime?     @map("ouverture_vente") @db.DateTime(0)
   festival       Boolean       @default(false)
   statut         StatutSeance  @default(PROGRAMMEE)
+  // Date de création : fixe la configuration de salle utilisée par la séance (US-7.2)
+  creeeLe        DateTime      @default(now()) @map("creee_le") @db.DateTime(0)
   film           Film          @relation(fields: [filmId], references: [id], onDelete: Restrict, map: "fk_seance_film")
   salle          Salle         @relation(fields: [salleId], references: [id], onDelete: Restrict, map: "fk_seance_salle")
   reservations   Reservation[]

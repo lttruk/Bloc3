@@ -168,7 +168,8 @@ export class SalleAdminDto {
 export class EntreeJournalDto {
   @ApiProperty() id!: number;
   @ApiProperty() action!: string;
-  @ApiProperty({ enum: ['FILM', 'SEANCE'] }) entite!: 'FILM' | 'SEANCE';
+  @ApiProperty({ enum: ['FILM', 'SEANCE', 'TARIF', 'SALLE'] })
+  entite!: 'FILM' | 'SEANCE' | 'TARIF' | 'SALLE';
   @ApiProperty() entiteId!: number;
   @ApiProperty({ nullable: true }) details!: unknown;
   @ApiProperty() creeLe!: Date;

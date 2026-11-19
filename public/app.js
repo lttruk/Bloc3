@@ -3,7 +3,7 @@
   const $ = (id) => document.getElementById(id);
   const MAX_PLACES = 10;
   const ACTUALISATION_MS = 5000;
-  const etat = { demoReservations: [], minuteurListe: null, jeton: null, email: null, demo: false, jour: 0, seances: [], seance: null, places: [], tarifs: [], selection: new Map(), minuteur: null, sondage: null };
+  const etat = { modeGuichet: false, demoReservations: [], minuteurListe: null, jeton: null, email: null, demo: false, jour: 0, seances: [], seance: null, places: [], tarifs: [], selection: new Map(), minuteur: null, sondage: null };
   const euros = (n) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   const debutJour = (decalage) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + decalage); return d; };
   const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -66,7 +66,7 @@
   }
 
   function afficher(vue) {
-    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin', 'vue-controle']) $(v).hidden = v !== vue;
+    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin', 'vue-controle', 'vue-guichet']) $(v).hidden = v !== vue;
     if (vue !== 'vue-salle') clearInterval(etat.sondage);
     if (vue !== 'vue-mes-reservations') clearInterval(etat.minuteurListe);
     if (vue !== 'vue-controle' && scan.flux) arreterCamera();
@@ -153,6 +153,14 @@
       infos.querySelector('.pastille').textContent = s.version;
       const bouton = document.createElement('button');
       bouton.type = 'button'; bouton.className = 'bouton'; bouton.textContent = 'Choisir mes places';
+      // US-7.2 : la vente en ligne ouvre à la date fixée par l'administrateur
+      if (s.ouvertureVente && new Date(s.ouvertureVente) > new Date()) {
+        bouton.disabled = true;
+        bouton.textContent = `Vente dès le ${fmtDate(s.ouvertureVente)} à ${fmtHeure(s.ouvertureVente)}`;
+        carte.append(aff, infos, bouton);
+        grille.append(carte);
+        continue;
+      }
       bouton.addEventListener('click', () => void ouvrirSeance(s));
       // Bouton posé sur l'affiche : même action que « Choisir mes places »
       const surAffiche = document.createElement('button');
@@ -180,7 +188,13 @@
     }
   }
 
-  async function ouvrirSeance(seance) {
+  async function ouvrirSeance(seance, { guichet = false } = {}) {
+    etat.modeGuichet = guichet;
+    $('bloc-guichet').hidden = !guichet;
+    $('mention-panier').textContent = guichet
+      ? 'Les billets sont émis dès l’encaissement, avec leur QR code.'
+      : 'Vos places sont conservées 10 minutes, le temps de finaliser.';
+    $('btn-retour').textContent = guichet ? '← Retour au guichet' : '← Retour à l\'affiche';
     etat.seance = seance;
     etat.selection.clear();
     try { await chargerPlan(); } catch (e) { notifier(e.message); return; }
@@ -264,11 +278,13 @@
     $('total').textContent = euros(total);
     const n = etat.selection.size;
     $('btn-reserver').disabled = n === 0;
-    $('btn-reserver').textContent = n === 0 ? 'Bloquer mes places' : `Bloquer ${n} place${n > 1 ? 's' : ''}`;
+    if (etat.modeGuichet) $('btn-reserver').textContent = n === 0 ? 'Encaisser' : `Encaisser ${euros(total)}`;
+    else $('btn-reserver').textContent = n === 0 ? 'Bloquer mes places' : `Bloquer ${n} place${n > 1 ? 's' : ''}`;
   }
 
   // ---------- Réservation ----------
   async function reserver() {
+    if (etat.modeGuichet) { await vendreAuGuichet(); return; }
     if (!etat.jeton && !etat.demo) { ouvrirAuth(false); notifier('Connectez-vous pour réserver vos places.'); return; }
     const places = [...etat.selection.values()].map((c) => ({ placeId: c.place.id, tarifId: c.tarifId }));
     $('btn-reserver').disabled = true;
@@ -511,6 +527,8 @@
     try {
       [admin.films, admin.salles] = await Promise.all([api('/admin/films'), api('/admin/salles')]);
     } catch (e) { erreurAdmin(e); return; }
+    const estAdmin = roleDuJeton(etat.jeton) === 'ADMIN';
+    for (const b of document.querySelectorAll('.onglets-admin button[data-role="ADMIN"]')) b.hidden = !estAdmin;
     if (!$('filtre-admin-jour').value) $('filtre-admin-jour').value = versChampLocal(new Date().toISOString()).slice(0, 10);
     remplirListesAdmin();
     dessinerFilms();
@@ -539,6 +557,8 @@
       $(b.dataset.onglet).hidden = b.dataset.onglet !== id;
     }
     if (id === 'admin-journal') void chargerJournal();
+    if (id === 'admin-tarifs') void chargerTarifs();
+    if (id === 'admin-salles') void chargerConfiguration();
   }
 
   // ----- Séances -----
@@ -755,7 +775,7 @@
       cellule(tr, fmtHoraireAdmin(e.creeLe));
       cellule(tr, e.auteur);
       cellule(tr, LIBELLES_JOURNAL[e.action] ?? e.action);
-      cellule(tr, `${e.entite === 'FILM' ? 'Film' : 'Séance'} n° ${e.entiteId}`);
+      cellule(tr, `${{ FILM: 'Film', SEANCE: 'Séance', TARIF: 'Tarif', SALLE: 'Salle' }[e.entite] ?? e.entite} n° ${e.entiteId}`);
       cellule(tr, e.details ? JSON.stringify(e.details) : '').className = 'petit doux';
     }
   }
@@ -770,10 +790,143 @@
   $('filtre-admin-jour').addEventListener('change', () => void chargerSeancesAdmin());
   $('filtre-admin-salle').addEventListener('change', () => void chargerSeancesAdmin());
 
+  // ---------- Paramétrage administrateur : tarifs et salles (US-7.2) ----------
+  const parametrage = { tarifEdite: null };
+
+  async function chargerTarifs() {
+    let tarifs;
+    try { tarifs = await api('/admin/tarifs'); } catch (e) { erreurAdmin(e); return; }
+    const corps = $('table-tarifs').tBodies[0];
+    corps.replaceChildren();
+    for (const t of tarifs) {
+      const tr = corps.insertRow();
+      if (!t.actif) tr.className = 'annulee';
+      cellule(tr, t.libelle);
+      cellule(tr, euros(t.prix));
+      cellule(tr, t.justificatifRequis ? 'Oui' : 'Non');
+      cellule(tr, String(t.billetsVendus));
+      cellule(tr, pastilleStatut(t.actif ? 'PUBLIE' : 'ARCHIVE', { PUBLIE: 'Actif', ARCHIVE: 'Inactif' }));
+      const actions = document.createElement('div'); actions.className = 'actions-ligne';
+      actions.append(boutonAction('Modifier', () => editerTarif(t)));
+      actions.append(t.actif
+        ? boutonAction('Désactiver', () => basculerTarif(t, false), true)
+        : boutonAction('Activer', () => basculerTarif(t, true)));
+      cellule(tr, actions);
+    }
+  }
+
+  function editerTarif(t) {
+    parametrage.tarifEdite = t.id;
+    const f = $('form-tarif').elements;
+    f.libelle.value = t.libelle; f.prix.value = t.prix; f.justificatifRequis.checked = t.justificatifRequis;
+    $('titre-form-tarif').textContent = `Modifier le tarif « ${t.libelle} »`;
+    $('btn-enregistrer-tarif').textContent = 'Enregistrer';
+    $('btn-annuler-edition-tarif').hidden = false;
+    $('erreur-tarif').textContent = '';
+  }
+
+  function reinitialiserFormTarif() {
+    parametrage.tarifEdite = null;
+    $('form-tarif').reset();
+    $('titre-form-tarif').textContent = 'Ajouter un tarif';
+    $('btn-enregistrer-tarif').textContent = 'Ajouter le tarif';
+    $('btn-annuler-edition-tarif').hidden = true;
+    $('erreur-tarif').textContent = '';
+  }
+
+  async function enregistrerTarif(ev) {
+    ev.preventDefault();
+    const f = ev.target.elements;
+    const corps = { libelle: f.libelle.value, prix: Number(f.prix.value), justificatifRequis: f.justificatifRequis.checked };
+    try {
+      if (parametrage.tarifEdite) await api(`/admin/tarifs/${parametrage.tarifEdite}`, { method: 'PATCH', body: JSON.stringify(corps) });
+      else await api('/admin/tarifs', { method: 'POST', body: JSON.stringify(corps) });
+      notifier(parametrage.tarifEdite ? 'Tarif modifié : les billets déjà vendus gardent leur prix.' : 'Tarif ajouté.');
+      reinitialiserFormTarif();
+      await chargerTarifs();
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) erreurAdmin(e); else $('erreur-tarif').textContent = e.message;
+    }
+  }
+
+  async function basculerTarif(t, actif) {
+    try {
+      await api(`/admin/tarifs/${t.id}`, { method: 'PATCH', body: JSON.stringify({ actif }) });
+      notifier(actif ? `Tarif « ${t.libelle} » remis en vente.` : `Tarif « ${t.libelle} » retiré de la vente.`);
+      await chargerTarifs();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  async function chargerConfiguration() {
+    const choix = $('config-salle');
+    if (!choix.options.length) choix.replaceChildren(...admin.salles.map((s) => new Option(s.nom, s.id)));
+    if (!choix.value) return;
+    let config;
+    try { config = await api(`/admin/salles/${choix.value}/configuration`); } catch (e) { erreurAdmin(e); return; }
+    $('config-info').textContent = `Capacité actuelle : ${config.salle.capacite} places. `
+      + (config.seancesAVenir > 0
+        ? `Les ${config.seancesAVenir} séance(s) déjà programmée(s) gardent leur plan : la nouvelle configuration s’applique aux séances créées ensuite.`
+        : 'La nouvelle configuration s’appliquera aux séances créées ensuite.');
+    $('table-config').tBodies[0].replaceChildren();
+    for (const r of config.rangees) ajouterRangee(r);
+    $('erreur-config').textContent = '';
+  }
+
+  function ajouterRangee(r = null) {
+    const corps = $('table-config').tBodies[0];
+    const tr = corps.insertRow();
+    const suivante = r?.rangee ?? String.fromCharCode(65 + corps.rows.length - 1);
+    const champ = (type, valeur, attributs) => {
+      const input = document.createElement('input');
+      input.type = type; input.value = valeur;
+      Object.assign(input, attributs);
+      return input;
+    };
+    cellule(tr, champ('text', suivante, { maxLength: 2, className: 'champ-config', ariaLabel: 'Lettre de la rangée' }));
+    cellule(tr, champ('number', r?.places ?? 10, { min: 1, max: 60, className: 'champ-config', ariaLabel: 'Nombre de places' }));
+    cellule(tr, champ('text', (r?.pmr ?? []).join(', '), { className: 'champ-config', placeholder: 'ex. 1, 2', ariaLabel: 'Numéros des places PMR' }));
+    const actions = document.createElement('div'); actions.className = 'actions-ligne';
+    actions.append(boutonAction('Retirer', () => tr.remove(), true));
+    cellule(tr, actions);
+  }
+
+  async function enregistrerConfiguration() {
+    const rangees = [...$('table-config').tBodies[0].rows].map((tr) => {
+      const [lettre, places, pmr] = tr.querySelectorAll('input');
+      return {
+        rangee: lettre.value.trim().toUpperCase(),
+        places: Number(places.value),
+        pmr: pmr.value.split(',').map((n) => n.trim()).filter(Boolean).map(Number),
+      };
+    });
+    if (rangees.length === 0) { $('erreur-config').textContent = 'Une salle compte au moins une rangée.'; return; }
+    if (!window.confirm('Enregistrer cette configuration ? Elle s’appliquera aux séances créées à partir de maintenant.')) return;
+    try {
+      const config = await api(`/admin/salles/${$('config-salle').value}/configuration`, { method: 'PUT', body: JSON.stringify({ rangees }) });
+      notifier(`Configuration enregistrée : ${config.salle.capacite} places pour les nouvelles séances.`);
+      admin.salles = await api('/admin/salles');
+      await chargerConfiguration();
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) erreurAdmin(e); else $('erreur-config').textContent = e.message;
+    }
+  }
+
+  $('form-tarif').addEventListener('submit', (ev) => void enregistrerTarif(ev));
+  $('btn-annuler-edition-tarif').addEventListener('click', reinitialiserFormTarif);
+  $('config-salle').addEventListener('change', () => void chargerConfiguration());
+  $('btn-ajouter-rangee').addEventListener('click', () => ajouterRangee());
+  $('btn-enregistrer-config').addEventListener('click', () => void enregistrerConfiguration());
+
   // ---------- Billets dématérialisés avec QR code (US-5.1) ----------
   async function ouvrirBillets(reference) {
     let billets;
     try { billets = await api(`/reservations/${encodeURIComponent(reference)}/billets`); } catch (e) { notifier(e.message); return; }
+    presenterBillets(billets, reference, 'Mes billets');
+  }
+
+  function presenterBillets(billets, reference, titre, { imprimerTous = false } = {}) {
+    $('titre-billets').textContent = titre;
+    $('btn-imprimer-tous').hidden = !imprimerTous;
     const liste = $('liste-billets');
     liste.replaceChildren();
     for (const b of billets) {
@@ -812,16 +965,19 @@
     $('fenetre-billets').showModal();
   }
 
-  function imprimerBillet(carte) {
+  function imprimerBillet(...cartes) {
     const fenetre = window.open('', '_blank', 'width=720,height=900');
     if (!fenetre) { notifier('Autorisez les fenêtres pour imprimer le billet.'); return; }
-    const copie = carte.cloneNode(true);
-    copie.querySelector('.boutons').remove();
     fenetre.document.title = 'Billet – Le Grand Cinéma';
     const style = fenetre.document.createElement('style');
     style.textContent = 'body{font-family:Arial,sans-serif;padding:24px}.billet{display:flex;gap:24px;border:2px solid #222;padding:20px;max-width:640px}.qr svg{width:220px;height:220px}h4{font-size:22px;margin:6px 0}.surtitre{color:#b4211d;font-weight:bold;text-transform:uppercase;font-size:12px}div{margin:4px 0}';
+    style.textContent += '.billet{page-break-after:always;margin-bottom:24px}';
     fenetre.document.head.append(style);
-    fenetre.document.body.append(fenetre.document.importNode(copie, true));
+    for (const carte of cartes) {
+      const copie = carte.cloneNode(true);
+      copie.querySelector('.boutons').remove();
+      fenetre.document.body.append(fenetre.document.importNode(copie, true));
+    }
     fenetre.focus();
     fenetre.print();
   }
@@ -942,6 +1098,78 @@
     champ.value = '';
   });
 
+  // ---------- Guichet : vente au comptoir (US-7.3) ----------
+  const ROLES_GUICHET = ['CAISSIER', 'ADMIN'];
+  const MODES_PAIEMENT = { CARTE: 'carte bancaire', ESPECES: 'espèces' };
+  const peutVendre = () => Boolean(etat.jeton) && !etat.demo && ROLES_GUICHET.includes(roleDuJeton(etat.jeton));
+
+  async function ouvrirGuichet() {
+    if (!peutVendre()) { notifier('Accès réservé au personnel du guichet.'); return; }
+    let seances, bilan;
+    try { [seances, bilan] = await Promise.all([api('/guichet/seances'), api('/guichet/bilan')]); } catch (e) { erreurAdmin(e); return; }
+    etat.modeGuichet = false;
+    dessinerBilan(bilan);
+    const corps = $('table-guichet').tBodies[0];
+    corps.replaceChildren();
+    if (seances.length === 0) {
+      const tr = corps.insertRow(); const td = cellule(tr, 'Aucune séance en vente sur les 7 prochains jours.'); td.colSpan = 6; td.className = 'doux';
+    }
+    for (const s of seances) {
+      const tr = corps.insertRow();
+      cellule(tr, `${fmtDate(s.debut)} ${fmtHeure(s.debut)}`);
+      cellule(tr, s.film);
+      cellule(tr, s.salle);
+      cellule(tr, s.version);
+      cellule(tr, `${s.placesLibres} / ${s.capacite}`);
+      const actions = document.createElement('div'); actions.className = 'actions-ligne';
+      if (s.placesLibres > 0) {
+        actions.append(boutonAction('Vendre', () => ouvrirSeance(
+          { id: s.id, debut: s.debut, version: s.version, festival: false, film: { titre: s.film }, salle: { nom: s.salle } },
+          { guichet: true },
+        )));
+      } else actions.append(pastilleStatut('COMPLET', { COMPLET: 'Complet' }));
+      cellule(tr, actions);
+    }
+    afficher('vue-guichet');
+  }
+
+  function dessinerBilan(bilan) {
+    const zone = $('bilan-guichet');
+    zone.replaceChildren();
+    for (const c of bilan.canaux) {
+      const carte = document.createElement('div'); carte.className = 'chiffre-bilan';
+      const libelle = document.createElement('div'); libelle.className = 'surtitre'; libelle.textContent = c.canal === 'WEB' ? 'Vendu en ligne aujourd’hui' : 'Vendu au guichet aujourd’hui';
+      const valeur = document.createElement('div'); valeur.className = 'valeur'; valeur.textContent = `${c.billets} billet${c.billets > 1 ? 's' : ''}`;
+      const montant = document.createElement('div'); montant.className = 'doux'; montant.textContent = euros(c.montant);
+      carte.append(libelle, valeur, montant);
+      zone.append(carte);
+    }
+  }
+
+  async function vendreAuGuichet() {
+    const places = [...etat.selection.values()].map((c) => ({ placeId: c.place.id, tarifId: c.tarifId }));
+    const modePaiement = $('mode-paiement').value;
+    $('btn-reserver').disabled = true;
+    try {
+      const vente = await api(`/guichet/seances/${etat.seance.id}/ventes`, { method: 'POST', body: JSON.stringify({ places, modePaiement }) });
+      etat.selection.clear();
+      await chargerPlan().catch(() => {});
+      dessinerPlan();
+      majPanier();
+      presenterBillets(vente.billets, vente.reference, `Vente ${vente.reference} · ${euros(vente.total)} en ${MODES_PAIEMENT[vente.modePaiement]}`, { imprimerTous: true });
+      notifier('Vente enregistrée : billets prêts à imprimer.');
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) { erreurAdmin(e); return; }
+      notifier(e.status === 409 ? 'Une de ces places vient d’être vendue ailleurs : le plan a été actualisé.' : e.message);
+      if (e.status === 409) { await chargerPlan().catch(() => {}); dessinerPlan(); }
+      majPanier();
+    }
+  }
+
+  $('btn-guichet').addEventListener('click', () => void ouvrirGuichet());
+  $('btn-retour-guichet').addEventListener('click', () => afficher('vue-programme'));
+  $('btn-imprimer-tous').addEventListener('click', () => imprimerBillet(...document.querySelectorAll('#liste-billets .billet')));
+
   // ---------- Compte ----------
   function ouvrirAuth(inscription) {
     $('onglet-connexion').setAttribute('aria-selected', String(!inscription));
@@ -973,6 +1201,7 @@
     $('btn-mes-reservations').hidden = !etat.jeton;
     $('btn-admin').hidden = !peutProgrammer();
     $('btn-controle').hidden = !peutControler();
+    $('btn-guichet').hidden = !peutVendre();
     const connecte = Boolean(etat.jeton);
     $('utilisateur').hidden = !connecte;
     $('utilisateur').textContent = connecte ? etat.email : '';
@@ -1014,7 +1243,7 @@
   $('onglet-connexion').addEventListener('click', () => ouvrirAuth(false));
   $('onglet-inscription').addEventListener('click', () => ouvrirAuth(true));
   $('fenetre-auth').addEventListener('click', (ev) => { if (ev.target === ev.currentTarget) ev.currentTarget.close(); });
-  $('btn-retour').addEventListener('click', () => afficher('vue-programme'));
+  $('btn-retour').addEventListener('click', () => { if (etat.modeGuichet) void ouvrirGuichet(); else afficher('vue-programme'); });
   $('btn-nouvelle').addEventListener('click', () => { clearInterval(etat.minuteur); afficher('vue-programme'); });
   $('lien-accueil').addEventListener('click', (ev) => { ev.preventDefault(); afficher('vue-programme'); });
   $('btn-reserver').addEventListener('click', () => void reserver());

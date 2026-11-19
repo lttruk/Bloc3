@@ -50,7 +50,10 @@ describe('MesReservationsService', () => {
 
       const [r] = await service.lister(7);
 
-      expect(prisma.reservation.findMany.mock.calls[0][0].where).toEqual({ utilisateurId: 7 });
+      expect(prisma.reservation.findMany.mock.calls[0][0].where).toEqual({
+        utilisateurId: 7,
+        canal: 'WEB',
+      });
       expect(r).toMatchObject({
         reference: 'A1B2C3D4E5F6',
         statut: 'EN_ATTENTE',

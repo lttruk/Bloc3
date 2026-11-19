@@ -12,7 +12,8 @@ export class MesReservationsService {
   async lister(utilisateurId: number): Promise<MaReservationDto[]> {
     const maintenant = new Date();
     const reservations = await this.prisma.reservation.findMany({
-      where: { utilisateurId },
+      // Les ventes au guichet enregistrées par un caissier ne sont pas ses propres réservations.
+      where: { utilisateurId, canal: 'WEB' },
       orderBy: { creeeLe: 'desc' },
       take: LIMITE_HISTORIQUE,
       select: {
