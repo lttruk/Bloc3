@@ -146,13 +146,16 @@ CREATE TABLE journal_admin (
     REFERENCES utilisateur(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+-- Les places existantes font partie de toutes les configurations passées : la colonne est
+-- créée avec une date ancienne, qui s'applique aux lignes déjà présentes...
 ALTER TABLE place
-  ADD COLUMN ajoutee_le DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ADD COLUMN ajoutee_le DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00',
   ADD COLUMN retiree_le DATETIME NULL;
 
--- Les places existantes font partie de toutes les configurations passées ;
--- celles déjà désactivées n'appartiennent à aucune.
-UPDATE place SET ajoutee_le = '2000-01-01 00:00:00';
+-- ... puis les nouvelles places sont datées à leur création.
+ALTER TABLE place MODIFY ajoutee_le DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- Les places déjà désactivées n'appartiennent à aucune configuration.
 UPDATE place SET retiree_le = '2000-01-01 00:00:00' WHERE active = 0;
 
 ALTER TABLE seance ADD COLUMN creee_le DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
