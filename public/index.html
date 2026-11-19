@@ -157,6 +157,7 @@
         <label>Durée (minutes)<input type="number" name="dureeMinutes" required min="1" max="600"></label>
         <label>Genre<input type="text" name="genre" maxlength="50"></label>
         <label>Classification<input type="text" name="classification" maxlength="30"></label>
+        <label class="large">Bande-annonce (lien https YouTube ou Vimeo)<input type="url" name="bandeAnnonceUrl" maxlength="500" placeholder="https://www.youtube.com/watch?v=…"></label>
         <label class="large">Synopsis<textarea name="synopsis" rows="3" maxlength="5000"></textarea></label>
         <p class="erreur" id="erreur-film" role="alert"></p>
         <div class="actions-form">
@@ -315,6 +316,24 @@
     </div>
   </div>
   <div id="liste-billets"></div>
+</dialog>
+
+<!-- Fiche détaillée d'un film (US-1.2) -->
+<dialog id="fenetre-film" aria-labelledby="fiche-titre">
+  <div class="fiche-entete">
+    <div id="fiche-affiche"></div>
+    <div class="fiche-infos">
+      <div class="surtitre" id="fiche-genre"></div>
+      <h2 id="fiche-titre"></h2>
+      <p class="fiche-detail" id="fiche-detail"></p>
+      <p id="fiche-synopsis"></p>
+      <div class="fiche-tarifs" id="fiche-tarifs"></div>
+    </div>
+    <button class="lien fermer-fiche" type="button" id="btn-fermer-fiche">Fermer</button>
+  </div>
+  <div class="fiche-video" id="fiche-video"></div>
+  <h3 class="fiche-intertitre">Séances</h3>
+  <div id="fiche-seances"></div>
 </dialog>
 
 <div class="toast" id="toast" role="status"></div>

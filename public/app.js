@@ -148,9 +148,17 @@
       infos.className = 'infos';
       infos.innerHTML = '<div class="date"></div><h3></h3><div class="detail"></div><div class="pastille"></div>';
       infos.querySelector('.date').textContent = `${fmtDate(s.debut)} · ${fmtHeure(s.debut)} · ${s.salle.nom}`;
-      infos.querySelector('h3').textContent = s.film.titre;
+      const titre = document.createElement('button');
+      titre.type = 'button'; titre.className = 'lien-titre'; titre.textContent = s.film.titre;
+      titre.setAttribute('aria-label', `Fiche du film ${s.film.titre}`);
+      titre.addEventListener('click', () => void ouvrirFiche(s.film));
+      infos.querySelector('h3').append(titre);
       infos.querySelector('.detail').textContent = [s.film.genre, `${s.film.dureeMinutes} min`].filter(Boolean).join(' · ');
       infos.querySelector('.pastille').textContent = s.version;
+      const lienFiche = document.createElement('button');
+      lienFiche.type = 'button'; lienFiche.className = 'lien lien-fiche'; lienFiche.textContent = 'Fiche du film, bande-annonce et autres séances';
+      lienFiche.addEventListener('click', () => void ouvrirFiche(s.film));
+      infos.append(lienFiche);
       const bouton = document.createElement('button');
       bouton.type = 'button'; bouton.className = 'bouton'; bouton.textContent = 'Choisir mes places';
       // US-7.2 : la vente en ligne ouvre à la date fixée par l'administrateur
@@ -173,6 +181,115 @@
       aff.addEventListener('click', (ev) => { if (ev.target === aff || !ev.target.closest('button')) void ouvrirSeance(s); });
       carte.append(aff, infos, bouton);
       grille.append(carte);
+    }
+  }
+
+  // ---------- Fiche détaillée d'un film (US-1.2) ----------
+  const LIBELLES_DISPO = { DISPONIBLE: 'Places disponibles', DERNIERES_PLACES: 'Dernières places', COMPLET: 'Complet' };
+
+  /** Adresse du lecteur intégrable (YouTube sans cookie ou Vimeo), ou null si le lien n'est pas reconnu. */
+  function lecteurVideo(url) {
+    let u;
+    try { u = new URL(url); } catch { return null; }
+    if (u.protocol !== 'https:') return null;
+    const hote = u.hostname.replace(/^(www|m)\./, '');
+    let id = null;
+    if (hote === 'youtu.be') id = u.pathname.slice(1);
+    else if (hote === 'youtube.com' || hote === 'youtube-nocookie.com') {
+      id = u.pathname === '/watch' ? u.searchParams.get('v') : (/^\/(?:embed|shorts)\/([\w-]+)/.exec(u.pathname) ?? [])[1];
+    }
+    if (id && /^[\w-]{11}$/.test(id)) return `https://www.youtube-nocookie.com/embed/${id}`;
+    let vimeo = null;
+    if (hote === 'vimeo.com') vimeo = /^\/(\d+)/.exec(u.pathname);
+    else if (hote === 'player.vimeo.com') vimeo = /^\/video\/(\d+)/.exec(u.pathname);
+    return vimeo ? `https://player.vimeo.com/video/${vimeo[1]}` : null;
+  }
+
+  function ficheDemo(film) {
+    const seances = DEMO.seances.filter((s) => s.film.id === film.id)
+      .map((s) => ({ ...s, placesLibres: 100, capacite: 120, disponibilite: 'DISPONIBLE' }));
+    return { ...film, synopsis: film.synopsis ?? null, bandeAnnonceUrl: null, tarifs: DEMO.tarifs, seances };
+  }
+
+  async function ouvrirFiche(film) {
+    let fiche;
+    try { fiche = etat.demo ? ficheDemo(film) : await api(`/films/${film.id}`); } catch (e) { notifier(e.message); return; }
+    $('fiche-affiche').replaceChildren(affiche(fiche));
+    $('fiche-genre').textContent = fiche.genre ?? '';
+    $('fiche-titre').textContent = fiche.titre;
+    $('fiche-detail').textContent = [`${fiche.dureeMinutes} min`, fiche.classification].filter(Boolean).join(' · ');
+    $('fiche-synopsis').textContent = fiche.synopsis ?? 'Synopsis à venir.';
+    $('fiche-tarifs').replaceChildren(...fiche.tarifs.map((t) => {
+      const e = document.createElement('span');
+      e.textContent = `${t.libelle} ${euros(Number(t.prix))}${t.justificatifRequis ? ' (justificatif)' : ''}`;
+      return e;
+    }));
+    dessinerBandeAnnonce(fiche);
+    dessinerSeancesFiche(fiche);
+    $('fenetre-film').showModal();
+  }
+
+  function dessinerBandeAnnonce(fiche) {
+    const zone = $('fiche-video');
+    zone.replaceChildren();
+    const lecteur = fiche.bandeAnnonceUrl ? lecteurVideo(fiche.bandeAnnonceUrl) : null;
+    if (lecteur) {
+      const cadre = document.createElement('iframe');
+      cadre.src = lecteur;
+      cadre.title = `Bande-annonce de ${fiche.titre}`;
+      cadre.loading = 'lazy';
+      cadre.allow = 'encrypted-media; picture-in-picture; fullscreen';
+      cadre.referrerPolicy = 'strict-origin-when-cross-origin';
+      zone.append(cadre);
+    } else if (fiche.bandeAnnonceUrl) {
+      const lien = document.createElement('a');
+      lien.href = fiche.bandeAnnonceUrl; lien.target = '_blank'; lien.rel = 'noopener noreferrer';
+      lien.className = 'bouton discret'; lien.textContent = 'Voir la bande-annonce';
+      zone.append(lien);
+    } else {
+      const p = document.createElement('p'); p.className = 'doux'; p.textContent = 'Bande-annonce bientôt disponible.';
+      zone.append(p);
+    }
+  }
+
+  function dessinerSeancesFiche(fiche) {
+    const zone = $('fiche-seances');
+    zone.replaceChildren();
+    if (fiche.seances.length === 0) {
+      const p = document.createElement('p'); p.className = 'doux'; p.textContent = 'Aucune séance programmée pour le moment.';
+      zone.append(p);
+      return;
+    }
+    let jourCourant = '';
+    for (const s of fiche.seances) {
+      const jour = fmtJourLong(s.debut);
+      if (jour !== jourCourant) {
+        jourCourant = jour;
+        const titre = document.createElement('h4'); titre.className = 'fiche-jour'; titre.textContent = jour;
+        zone.append(titre);
+      }
+      const ligne = document.createElement('div');
+      ligne.className = 'fiche-seance';
+      const heure = document.createElement('span'); heure.className = 'heure'; heure.textContent = fmtHeure(s.debut);
+      const quoi = document.createElement('span'); quoi.className = 'quoi';
+      quoi.textContent = [s.version, s.salle.nom, s.festival ? 'Sélection festival' : ''].filter(Boolean).join(' · ');
+      const dispo = document.createElement('span'); dispo.className = `dispo ${s.disponibilite}`;
+      dispo.textContent = s.disponibilite === 'DERNIERES_PLACES'
+        ? `${LIBELLES_DISPO.DERNIERES_PLACES} (${s.placesLibres})` : LIBELLES_DISPO[s.disponibilite];
+      ligne.append(heure, quoi, dispo);
+      if (s.disponibilite !== 'COMPLET') {
+        const bouton = document.createElement('button');
+        bouton.type = 'button'; bouton.className = 'bouton'; bouton.textContent = 'Réserver';
+        bouton.setAttribute('aria-label', `Réserver la séance de ${fmtHeure(s.debut)}, ${jour}`);
+        if (s.ouvertureVente && new Date(s.ouvertureVente) > new Date()) {
+          bouton.disabled = true;
+          bouton.textContent = `Vente dès le ${fmtDate(s.ouvertureVente)} à ${fmtHeure(s.ouvertureVente)}`;
+        } else {
+          bouton.addEventListener('click', () => { $('fenetre-film').close(); void ouvrirSeance({ ...s, film: fiche }); });
+        }
+        ligne.append(bouton);
+      }
+      zone.append(ligne);
     }
   }
 
@@ -710,6 +827,7 @@
     const f = $('form-film').elements;
     f.titre.value = film.titre; f.dureeMinutes.value = film.dureeMinutes; f.genre.value = film.genre ?? '';
     f.classification.value = film.classification ?? ''; f.synopsis.value = film.synopsis ?? '';
+    f.bandeAnnonceUrl.value = film.bandeAnnonceUrl ?? '';
     $('titre-form-film').textContent = `Modifier « ${film.titre} »`;
     $('btn-enregistrer-film').textContent = 'Enregistrer';
     $('btn-annuler-edition-film').hidden = false;
@@ -731,6 +849,8 @@
     const f = ev.target.elements;
     const corps = { titre: f.titre.value, dureeMinutes: Number(f.dureeMinutes.value) };
     for (const champ of ['genre', 'classification', 'synopsis']) if (f[champ].value.trim()) corps[champ] = f[champ].value;
+    // Bande-annonce : envoyée vide en modification pour pouvoir la retirer
+    if (f.bandeAnnonceUrl.value.trim() || admin.filmEdite) corps.bandeAnnonceUrl = f.bandeAnnonceUrl.value.trim();
     try {
       if (admin.filmEdite) {
         await api(`/admin/films/${admin.filmEdite}`, { method: 'PATCH', body: JSON.stringify(corps) });
@@ -1243,6 +1363,13 @@
   $('onglet-connexion').addEventListener('click', () => ouvrirAuth(false));
   $('onglet-inscription').addEventListener('click', () => ouvrirAuth(true));
   $('fenetre-auth').addEventListener('click', (ev) => { if (ev.target === ev.currentTarget) ev.currentTarget.close(); });
+  $('btn-fermer-fiche').addEventListener('click', () => $('fenetre-film').close());
+  $('fenetre-film').addEventListener('click', (ev) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) ev.currentTarget.close();
+  });
+  // La vidéo s'arrête à la fermeture de la fiche
+  $('fenetre-film').addEventListener('close', () => $('fiche-video').replaceChildren());
   $('btn-retour').addEventListener('click', () => { if (etat.modeGuichet) void ouvrirGuichet(); else afficher('vue-programme'); });
   $('btn-nouvelle').addEventListener('click', () => { clearInterval(etat.minuteur); afficher('vue-programme'); });
   $('lien-accueil').addEventListener('click', (ev) => { ev.preventDefault(); afficher('vue-programme'); });
