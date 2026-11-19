@@ -1,4 +1,4 @@
--- La Grande Cinéma – Modèle physique de données (MySQL 8)
+-- Le Grand Cinéma – Modèle physique de données (MySQL 8)
 -- Correspond au MCD et au MLD du Dossier 1, Question 2.
 
 CREATE DATABASE IF NOT EXISTS grande_cinema
@@ -130,4 +130,18 @@ CREATE TABLE paiement (
   CONSTRAINT fk_paiement_reservation FOREIGN KEY (reservation_id)
     REFERENCES reservation(id) ON DELETE RESTRICT,
   CONSTRAINT chk_paiement_montant CHECK (montant >= 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE journal_admin (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  utilisateur_id INT UNSIGNED NOT NULL,
+  action         VARCHAR(40) NOT NULL,
+  entite         ENUM('FILM','SEANCE') NOT NULL,
+  entite_id      INT UNSIGNED NOT NULL,
+  details        JSON NULL,
+  cree_le        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_journal_entite (entite, entite_id),
+  KEY idx_journal_date (cree_le),
+  CONSTRAINT fk_journal_utilisateur FOREIGN KEY (utilisateur_id)
+    REFERENCES utilisateur(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;

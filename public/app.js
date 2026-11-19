@@ -66,7 +66,7 @@
   }
 
   function afficher(vue) {
-    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations']) $(v).hidden = v !== vue;
+    for (const v of ['vue-programme', 'vue-salle', 'vue-confirmation', 'vue-mes-reservations', 'vue-admin']) $(v).hidden = v !== vue;
     if (vue !== 'vue-salle') clearInterval(etat.sondage);
     if (vue !== 'vue-mes-reservations') clearInterval(etat.minuteurListe);
     window.scrollTo({ top: 0 });
@@ -297,6 +297,7 @@
     const libelles = [...etat.selection.values()].map((c) => `${c.place.rangee}${c.place.numero}`).join(', ');
     $('conf-detail').textContent = `${etat.seance.film.titre} · ${fmtJourLong(etat.seance.debut)} à ${fmtHeure(etat.seance.debut)} · Places ${libelles}`;
     $('conf-reference').textContent = r.reference;
+    etat.referenceAPayer = r.reference;
     clearInterval(etat.minuteur);
     const fin = new Date(r.expireLe).getTime();
     const tic = () => {
@@ -370,7 +371,10 @@
         const liberer = document.createElement('button');
         liberer.type = 'button'; liberer.className = 'bouton'; liberer.textContent = 'Libérer les places';
         liberer.addEventListener('click', () => void libererReservation(r.reference));
-        carte.querySelector('.boutons').append(voir, liberer);
+        const payerResa = document.createElement('button');
+        payerResa.type = 'button'; payerResa.className = 'bouton'; payerResa.textContent = 'Payer';
+        payerResa.addEventListener('click', () => void payer(r.reference));
+        carte.querySelector('.boutons').append(voir, liberer, payerResa);
       }
       conteneur.append(carte);
     }
@@ -415,6 +419,350 @@
     if (seance) void ouvrirSeance(seance);
   }
 
+  // ---------- Paiement en ligne (US-4.1) ----------
+  async function payer(reference) {
+    if (etat.demo) { notifier('Paiement indisponible en mode démonstration.'); return; }
+    try {
+      const { url } = await api(`/reservations/${encodeURIComponent(reference)}/paiement`, { method: 'POST' });
+      window.location.assign(url);
+    } catch (e) {
+      if (e.status === 401) { etat.jeton = null; majCompte(); ouvrirAuth(false); notifier('Votre session a expiré : reconnectez-vous.'); return; }
+      notifier(e.message);
+    }
+  }
+
+  // Retour depuis la page Stripe : l'état du paiement est vérifié par l'API, pas déduit de l'adresse.
+  async function traiterRetourPaiement() {
+    const params = new URLSearchParams(window.location.search);
+    const retour = params.get('paiement');
+    if (!retour) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!etat.jeton) { ouvrirAuth(false); notifier('Reconnectez-vous pour retrouver votre réservation.'); return; }
+    if (retour === 'annule') {
+      notifier('Paiement non abouti : vos places restent bloquées jusqu’à la fin du délai de 10 minutes.');
+      void ouvrirMesReservations();
+      return;
+    }
+    try {
+      const r = await api('/paiements/verification', { method: 'POST', body: JSON.stringify({ sessionId: params.get('session_id') }) });
+      if (r.aRembourser) notifier('Paiement reçu après la libération de vos places : il vous sera remboursé.');
+      else if (r.statut === 'CONFIRMEE') notifier(`Paiement accepté : réservation ${r.reference} confirmée.`);
+      else notifier('Paiement en cours de validation : actualisez vos réservations dans un instant.');
+    } catch (e) {
+      notifier(e.message);
+    }
+    void ouvrirMesReservations();
+  }
+
+  $('btn-payer').addEventListener('click', () => { if (etat.referenceAPayer) void payer(etat.referenceAPayer); });
+
+  // ---------- Back-office : programmation des films et des séances (US-7.1) ----------
+  const ROLES_PROGRAMMATION = ['PROGRAMMATION', 'ADMIN'];
+  const LIBELLES_SEANCE = { PROGRAMMEE: 'Non publiée', PUBLIEE: 'Publiée', ANNULEE: 'Annulée' };
+  const LIBELLES_FILM = { BROUILLON: 'Brouillon', PUBLIE: 'Publié', ARCHIVE: 'Archivé' };
+  const LIBELLES_JOURNAL = { CREATION: 'Création', MODIFICATION: 'Modification', STATUT: 'Changement de statut', ANNULATION: 'Annulation', SUPPRESSION: 'Suppression' };
+  const admin = { films: [], salles: [], seances: [], filmEdite: null, seanceEditee: null };
+
+  // Le rôle est lu dans le jeton pour afficher le menu ; l'API vérifie elle-même les droits à chaque appel.
+  function roleDuJeton(jeton) {
+    try {
+      const charge = jeton.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(charge)).role ?? null;
+    } catch { return null; }
+  }
+  const peutProgrammer = () => Boolean(etat.jeton) && !etat.demo && ROLES_PROGRAMMATION.includes(roleDuJeton(etat.jeton));
+
+  // Conversions entre l'heure locale des champs datetime-local et l'ISO 8601 de l'API
+  const versChampLocal = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const depuisChampLocal = (valeur) => (valeur ? new Date(valeur).toISOString() : undefined);
+  const fmtHoraireAdmin = (d) => `${fmtDate(d)} ${fmtHeure(d)}`;
+
+  function cellule(ligne, contenu) {
+    const td = document.createElement('td');
+    if (contenu instanceof Node) td.append(contenu); else td.textContent = contenu ?? '';
+    ligne.append(td);
+    return td;
+  }
+  function pastilleStatut(statut, libelles) {
+    const s = document.createElement('span'); s.className = `statut ${statut}`; s.textContent = libelles[statut] ?? statut;
+    return s;
+  }
+  function boutonAction(texte, action, danger = false) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = texte;
+    if (danger) b.className = 'danger';
+    b.addEventListener('click', () => void action());
+    return b;
+  }
+  function erreurAdmin(e) {
+    if (e.status === 401) { etat.jeton = null; majCompte(); afficher('vue-programme'); ouvrirAuth(false); notifier('Votre session a expiré : reconnectez-vous.'); return; }
+    if (e.status === 403) { afficher('vue-programme'); notifier('Accès réservé à l’équipe de programmation.'); return; }
+    notifier(e.message);
+  }
+
+  async function ouvrirAdmin() {
+    if (!peutProgrammer()) { notifier('Accès réservé à l’équipe de programmation.'); return; }
+    try {
+      [admin.films, admin.salles] = await Promise.all([api('/admin/films'), api('/admin/salles')]);
+    } catch (e) { erreurAdmin(e); return; }
+    if (!$('filtre-admin-jour').value) $('filtre-admin-jour').value = versChampLocal(new Date().toISOString()).slice(0, 10);
+    remplirListesAdmin();
+    dessinerFilms();
+    afficher('vue-admin');
+    await chargerSeancesAdmin();
+  }
+
+  function remplirListesAdmin() {
+    const film = $('form-seance').elements.filmId;
+    const choixFilm = film.value;
+    film.replaceChildren(...admin.films.filter((f) => f.statut !== 'ARCHIVE').map((f) => new Option(`${f.titre} (${f.dureeMinutes} min)${f.statut === 'BROUILLON' ? ' – brouillon' : ''}`, f.id)));
+    if (choixFilm) film.value = choixFilm;
+    const salle = $('form-seance').elements.salleId;
+    const choixSalle = salle.value;
+    salle.replaceChildren(...admin.salles.map((s) => new Option(`${s.nom} (${s.capacite} places)`, s.id)));
+    if (choixSalle) salle.value = choixSalle;
+    const filtre = $('filtre-admin-salle');
+    const choixFiltre = filtre.value;
+    filtre.replaceChildren(new Option('Toutes', ''), ...admin.salles.map((s) => new Option(s.nom, s.id)));
+    filtre.value = choixFiltre;
+  }
+
+  function choisirOnglet(id) {
+    for (const b of document.querySelectorAll('.onglets-admin button')) {
+      b.setAttribute('aria-selected', String(b.dataset.onglet === id));
+      $(b.dataset.onglet).hidden = b.dataset.onglet !== id;
+    }
+    if (id === 'admin-journal') void chargerJournal();
+  }
+
+  // ----- Séances -----
+  async function chargerSeancesAdmin() {
+    const du = new Date(`${$('filtre-admin-jour').value}T00:00`);
+    const au = new Date(du); au.setDate(au.getDate() + 7);
+    const params = new URLSearchParams({ du: du.toISOString(), au: au.toISOString() });
+    if ($('filtre-admin-salle').value) params.set('salleId', $('filtre-admin-salle').value);
+    try { admin.seances = await api(`/admin/seances?${params}`); } catch (e) { erreurAdmin(e); return; }
+    dessinerSeancesAdmin();
+  }
+
+  function dessinerSeancesAdmin() {
+    const corps = $('table-seances').tBodies[0];
+    corps.replaceChildren();
+    if (admin.seances.length === 0) {
+      const tr = corps.insertRow(); const td = cellule(tr, 'Aucune séance sur ces 7 jours.'); td.colSpan = 7; td.className = 'doux';
+      return;
+    }
+    for (const s of admin.seances) {
+      const tr = corps.insertRow();
+      if (s.statut === 'ANNULEE') tr.className = 'annulee';
+      cellule(tr, `${fmtHoraireAdmin(s.debut)} → ${fmtHeure(s.fin)}`);
+      cellule(tr, s.festival ? `${s.film.titre} ★ Festival` : s.film.titre);
+      cellule(tr, s.salle.nom);
+      cellule(tr, s.version);
+      cellule(tr, String(s.billetsActifs));
+      cellule(tr, pastilleStatut(s.statut, LIBELLES_SEANCE));
+      const actions = document.createElement('div'); actions.className = 'actions-ligne';
+      if (s.statut !== 'ANNULEE') {
+        actions.append(s.statut === 'PUBLIEE'
+          ? boutonAction('Dépublier', () => statutSeance(s, 'PROGRAMMEE'))
+          : boutonAction('Publier', () => statutSeance(s, 'PUBLIEE')));
+        actions.append(boutonAction('Modifier', () => editerSeance(s)));
+        actions.append(boutonAction('Annuler', () => annulerSeanceAdmin(s), true));
+        if (s.billetsActifs === 0) actions.append(boutonAction('Supprimer', () => supprimerSeanceAdmin(s), true));
+      }
+      cellule(tr, actions);
+    }
+  }
+
+  function editerSeance(s) {
+    admin.seanceEditee = s.id;
+    const f = $('form-seance').elements;
+    f.filmId.value = s.film.id; f.salleId.value = s.salle.id; f.debut.value = versChampLocal(s.debut);
+    f.version.value = s.version; f.festival.checked = s.festival;
+    f.ouvertureVente.value = s.ouvertureVente ? versChampLocal(s.ouvertureVente) : '';
+    $('titre-form-seance').textContent = `Modifier la séance du ${fmtHoraireAdmin(s.debut)}`;
+    $('btn-enregistrer-seance').textContent = 'Enregistrer';
+    $('btn-annuler-edition-seance').hidden = false;
+    $('erreur-seance').textContent = '';
+    $('form-seance').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function reinitialiserFormSeance() {
+    admin.seanceEditee = null;
+    const choix = { filmId: $('form-seance').elements.filmId.value, salleId: $('form-seance').elements.salleId.value };
+    $('form-seance').reset();
+    $('form-seance').elements.filmId.value = choix.filmId; $('form-seance').elements.salleId.value = choix.salleId;
+    $('titre-form-seance').textContent = 'Programmer une séance';
+    $('btn-enregistrer-seance').textContent = 'Programmer la séance';
+    $('btn-annuler-edition-seance').hidden = true;
+    $('erreur-seance').textContent = '';
+  }
+
+  async function enregistrerSeance(ev) {
+    ev.preventDefault();
+    const f = ev.target.elements;
+    if (!f.debut.value) { $('erreur-seance').textContent = 'Indiquez le début de la séance.'; return; }
+    const corps = {
+      filmId: Number(f.filmId.value), salleId: Number(f.salleId.value), debut: depuisChampLocal(f.debut.value),
+      version: f.version.value, festival: f.festival.checked,
+    };
+    if (f.ouvertureVente.value) corps.ouvertureVente = depuisChampLocal(f.ouvertureVente.value);
+    try {
+      if (admin.seanceEditee) {
+        await api(`/admin/seances/${admin.seanceEditee}`, { method: 'PATCH', body: JSON.stringify(corps) });
+        notifier('Séance modifiée.');
+      } else {
+        await api('/admin/seances', { method: 'POST', body: JSON.stringify(corps) });
+        notifier('Séance programmée. Publiez-la pour l’ouvrir à la réservation.');
+      }
+      reinitialiserFormSeance();
+      await chargerSeancesAdmin();
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) erreurAdmin(e); else $('erreur-seance').textContent = e.message;
+    }
+  }
+
+  async function statutSeance(s, statut) {
+    try {
+      await api(`/admin/seances/${s.id}/statut`, { method: 'PATCH', body: JSON.stringify({ statut }) });
+      notifier(statut === 'PUBLIEE' ? 'Séance publiée : elle est visible et réservable.' : 'Séance dépubliée.');
+      await chargerSeancesAdmin();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  async function annulerSeanceAdmin(s) {
+    const message = s.billetsActifs > 0
+      ? `Annuler cette séance ? Ses ${s.billetsActifs} billet(s) seront invalidés et les réservations payées devront être remboursées.`
+      : 'Annuler cette séance ?';
+    if (!window.confirm(message)) return;
+    try {
+      const r = await api(`/admin/seances/${s.id}/annulation`, { method: 'POST' });
+      notifier(r.remboursementsATraiter > 0 ? `Séance annulée : ${r.remboursementsATraiter} remboursement(s) à traiter.` : 'Séance annulée.');
+      await chargerSeancesAdmin();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  async function supprimerSeanceAdmin(s) {
+    if (!window.confirm('Supprimer définitivement cette séance ?')) return;
+    try {
+      await api(`/admin/seances/${s.id}`, { method: 'DELETE' });
+      notifier('Séance supprimée.');
+      await chargerSeancesAdmin();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  // ----- Films -----
+  function dessinerFilms() {
+    const corps = $('table-films').tBodies[0];
+    corps.replaceChildren();
+    for (const film of admin.films) {
+      const tr = corps.insertRow();
+      if (film.statut === 'ARCHIVE') tr.className = 'annulee';
+      cellule(tr, film.titre);
+      cellule(tr, `${film.dureeMinutes} min`);
+      cellule(tr, film.genre ?? '—');
+      cellule(tr, String(film.seancesAVenir));
+      cellule(tr, pastilleStatut(film.statut, LIBELLES_FILM));
+      const actions = document.createElement('div'); actions.className = 'actions-ligne';
+      if (film.statut !== 'PUBLIE') actions.append(boutonAction('Publier', () => statutFilm(film, 'PUBLIE')));
+      if (film.statut === 'PUBLIE') actions.append(boutonAction('Dépublier', () => statutFilm(film, 'BROUILLON')));
+      actions.append(boutonAction('Modifier', () => editerFilm(film)));
+      if (film.statut !== 'ARCHIVE') actions.append(boutonAction('Archiver', () => statutFilm(film, 'ARCHIVE'), true));
+      actions.append(boutonAction('Supprimer', () => supprimerFilmAdmin(film), true));
+      cellule(tr, actions);
+    }
+  }
+
+  async function rechargerFilms() {
+    admin.films = await api('/admin/films');
+    dessinerFilms();
+    remplirListesAdmin();
+  }
+
+  function editerFilm(film) {
+    admin.filmEdite = film.id;
+    const f = $('form-film').elements;
+    f.titre.value = film.titre; f.dureeMinutes.value = film.dureeMinutes; f.genre.value = film.genre ?? '';
+    f.classification.value = film.classification ?? ''; f.synopsis.value = film.synopsis ?? '';
+    $('titre-form-film').textContent = `Modifier « ${film.titre} »`;
+    $('btn-enregistrer-film').textContent = 'Enregistrer';
+    $('btn-annuler-edition-film').hidden = false;
+    $('erreur-film').textContent = '';
+    $('form-film').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function reinitialiserFormFilm() {
+    admin.filmEdite = null;
+    $('form-film').reset();
+    $('titre-form-film').textContent = 'Ajouter un film';
+    $('btn-enregistrer-film').textContent = 'Ajouter le film';
+    $('btn-annuler-edition-film').hidden = true;
+    $('erreur-film').textContent = '';
+  }
+
+  async function enregistrerFilm(ev) {
+    ev.preventDefault();
+    const f = ev.target.elements;
+    const corps = { titre: f.titre.value, dureeMinutes: Number(f.dureeMinutes.value) };
+    for (const champ of ['genre', 'classification', 'synopsis']) if (f[champ].value.trim()) corps[champ] = f[champ].value;
+    try {
+      if (admin.filmEdite) {
+        await api(`/admin/films/${admin.filmEdite}`, { method: 'PATCH', body: JSON.stringify(corps) });
+        notifier('Film modifié.');
+      } else {
+        await api('/admin/films', { method: 'POST', body: JSON.stringify(corps) });
+        notifier('Film ajouté en brouillon. Publiez-le pour l’afficher.');
+      }
+      reinitialiserFormFilm();
+      await rechargerFilms();
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) erreurAdmin(e); else $('erreur-film').textContent = e.message;
+    }
+  }
+
+  async function statutFilm(film, statut) {
+    if (statut === 'ARCHIVE' && !window.confirm(`Archiver « ${film.titre} » ? Il ne pourra plus être programmé.`)) return;
+    try {
+      await api(`/admin/films/${film.id}/statut`, { method: 'PATCH', body: JSON.stringify({ statut }) });
+      notifier({ PUBLIE: 'Film publié.', BROUILLON: 'Film dépublié : ses séances ne sont plus visibles.', ARCHIVE: 'Film archivé.' }[statut]);
+      await rechargerFilms();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  async function supprimerFilmAdmin(film) {
+    if (!window.confirm(`Supprimer définitivement « ${film.titre} » ?`)) return;
+    try {
+      await api(`/admin/films/${film.id}`, { method: 'DELETE' });
+      notifier('Film supprimé.');
+      await rechargerFilms();
+    } catch (e) { erreurAdmin(e); }
+  }
+
+  // ----- Journal -----
+  async function chargerJournal() {
+    let entrees;
+    try { entrees = await api('/admin/journal'); } catch (e) { erreurAdmin(e); return; }
+    const corps = $('table-journal').tBodies[0];
+    corps.replaceChildren();
+    for (const e of entrees) {
+      const tr = corps.insertRow();
+      cellule(tr, fmtHoraireAdmin(e.creeLe));
+      cellule(tr, e.auteur);
+      cellule(tr, LIBELLES_JOURNAL[e.action] ?? e.action);
+      cellule(tr, `${e.entite === 'FILM' ? 'Film' : 'Séance'} n° ${e.entiteId}`);
+      cellule(tr, e.details ? JSON.stringify(e.details) : '').className = 'petit doux';
+    }
+  }
+
+  $('btn-admin').addEventListener('click', () => void ouvrirAdmin());
+  $('btn-retour-admin').addEventListener('click', () => afficher('vue-programme'));
+  for (const b of document.querySelectorAll('.onglets-admin button')) b.addEventListener('click', () => choisirOnglet(b.dataset.onglet));
+  $('form-seance').addEventListener('submit', (ev) => void enregistrerSeance(ev));
+  $('form-film').addEventListener('submit', (ev) => void enregistrerFilm(ev));
+  $('btn-annuler-edition-seance').addEventListener('click', reinitialiserFormSeance);
+  $('btn-annuler-edition-film').addEventListener('click', reinitialiserFormFilm);
+  $('filtre-admin-jour').addEventListener('change', () => void chargerSeancesAdmin());
+  $('filtre-admin-salle').addEventListener('change', () => void chargerSeancesAdmin());
+
   // ---------- Compte ----------
   function ouvrirAuth(inscription) {
     $('onglet-connexion').setAttribute('aria-selected', String(!inscription));
@@ -444,6 +792,7 @@
   function majCompte() {
     memoriserSession();
     $('btn-mes-reservations').hidden = !etat.jeton;
+    $('btn-admin').hidden = !peutProgrammer();
     const connecte = Boolean(etat.jeton);
     $('utilisateur').hidden = !connecte;
     $('utilisateur').textContent = connecte ? etat.email : '';
@@ -495,4 +844,5 @@
   majCompte();
   dessinerJours();
   void chargerProgramme();
+  void traiterRetourPaiement();
 })();
